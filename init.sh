@@ -19,14 +19,16 @@ DEFAULT_BASE_PORT=13000
 read -p "Enter base port for Docker services (default $DEFAULT_BASE_PORT): " BASE_PORT
 BASE_PORT=${BASE_PORT:-$DEFAULT_BASE_PORT}
 
+FRONTEND_PORT=$BASE_PORT
 API_PORT=$((BASE_PORT + 2))
 DB_PORT=$((BASE_PORT + 4))
 
 echo "--------------------------------------------------"
 echo "Configuration:"
-echo "  Project Name: $NEW_NAME"
-echo "  API Port:     $API_PORT"
-echo "  DB Port:      $DB_PORT"
+echo "  Project Name:  $NEW_NAME"
+echo "  Frontend Port: $FRONTEND_PORT"
+echo "  API Port:      $API_PORT"
+echo "  DB Port:       $DB_PORT"
 echo "--------------------------------------------------"
 
 read -p "Proceed with initialization? (y/n): " CONFIRM
@@ -38,28 +40,39 @@ fi
 # 3. Update Docker Ports
 echo "Updating Docker ports..."
 # We use a simple sed here assuming the structure of docker-compose.local.yml is known and consistent
+# Frontend Port: "13000:3000" -> "$FRONTEND_PORT:3000"
 # API Port: "13002:8080" -> "$API_PORT:8080"
 # DB Port: "13004:5432" -> "$DB_PORT:5432"
 
 OS=$(uname)
 if [ "$OS" = "Darwin" ]; then
+    sed -i '' "s/13000:3000/$FRONTEND_PORT:3000/g" docker-compose.local.yml
     sed -i '' "s/13002:8080/$API_PORT:8080/g" docker-compose.local.yml
     sed -i '' "s/13004:5432/$DB_PORT:5432/g" docker-compose.local.yml
     
     # Update appsettings.Development.json (DB Port)
-    sed -i '' "s/Port=13004/Port=$DB_PORT/g" src/MyProject.WebApi/appsettings.Development.json
+    sed -i '' "s/Port=13004/Port=$DB_PORT/g" src/backend/MyProject.WebApi/appsettings.Development.json
     
     # Update http-client.env.json (API Port)
-    sed -i '' "s/localhost:13002/localhost:$API_PORT/g" src/MyProject.WebApi/http-client.env.json
+    sed -i '' "s/localhost:13002/localhost:$API_PORT/g" src/backend/MyProject.WebApi/http-client.env.json
+
+    # Create and update frontend .env.local
+    cp src/frontend/.env.example src/frontend/.env.local
+    sed -i '' "s/localhost:13002/localhost:$API_PORT/g" src/frontend/.env.local
 else
+    sed -i "s/13000:3000/$FRONTEND_PORT:3000/g" docker-compose.local.yml
     sed -i "s/13002:8080/$API_PORT:8080/g" docker-compose.local.yml
     sed -i "s/13004:5432/$DB_PORT:5432/g" docker-compose.local.yml
 
     # Update appsettings.Development.json (DB Port)
-    sed -i "s/Port=13004/Port=$DB_PORT/g" src/MyProject.WebApi/appsettings.Development.json
+    sed -i "s/Port=13004/Port=$DB_PORT/g" src/backend/MyProject.WebApi/appsettings.Development.json
 
     # Update http-client.env.json (API Port)
-    sed -i "s/localhost:13002/localhost:$API_PORT/g" src/MyProject.WebApi/http-client.env.json
+    sed -i "s/localhost:13002/localhost:$API_PORT/g" src/backend/MyProject.WebApi/http-client.env.json
+
+    # Create and update frontend .env.local
+    cp src/frontend/.env.example src/frontend/.env.local
+    sed -i "s/localhost:13002/localhost:$API_PORT/g" src/frontend/.env.local
 fi
 
 # 4. Rename Project
@@ -116,7 +129,7 @@ read -p "Do you want to reset and create a fresh Initial Migration? (y/n): " MIG
 if [[ "$MIGRATION_CONFIRM" == "y" || "$MIGRATION_CONFIRM" == "Y" ]]; then
     echo "Resetting migrations..."
     
-    MIGRATION_DIR="src/$NEW_NAME.Infrastructure/Features/Postgres/Migrations"
+    MIGRATION_DIR="src/backend/$NEW_NAME.Infrastructure/Features/Postgres/Migrations"
     
     if [ -d "$MIGRATION_DIR" ]; then
         echo "Removing existing migrations in $MIGRATION_DIR..."
@@ -134,15 +147,15 @@ if [[ "$MIGRATION_CONFIRM" == "y" || "$MIGRATION_CONFIRM" == "Y" ]]; then
 
     # Restore and build explicitly
     echo "Restoring dependencies..."
-    dotnet restore "src/$NEW_NAME.WebApi"
+    dotnet restore "src/backend/$NEW_NAME.WebApi"
 
     echo "Building project..."
-    dotnet build "src/$NEW_NAME.WebApi" --no-restore
+    dotnet build "src/backend/$NEW_NAME.WebApi" --no-restore
 
     echo "Running migrations..."
     dotnet ef migrations add Initial \
-        --project "src/$NEW_NAME.Infrastructure" \
-        --startup-project "src/$NEW_NAME.WebApi" \
+        --project "src/backend/$NEW_NAME.Infrastructure" \
+        --startup-project "src/backend/$NEW_NAME.WebApi" \
         --output-dir Features/Postgres/Migrations \
         --no-build
 

@@ -26,14 +26,16 @@ if ($BasePort -eq 13000) {
     }
 }
 
+$FrontendPort = $BasePort
 $ApiPort = $BasePort + 2
 $DbPort = $BasePort + 4
 
 Write-Host "--------------------------------------------------"
 Write-Host "Configuration:"
-Write-Host "  Project Name: $NewName"
-Write-Host "  API Port:     $ApiPort"
-Write-Host "  DB Port:      $DbPort"
+Write-Host "  Project Name:  $NewName"
+Write-Host "  Frontend Port: $FrontendPort"
+Write-Host "  API Port:      $ApiPort"
+Write-Host "  DB Port:       $DbPort"
 Write-Host "--------------------------------------------------"
 
 $confirm = Read-Host "Proceed with initialization? (y/n)"
@@ -47,6 +49,7 @@ Write-Host "Updating Docker ports..."
 $dockerFile = "docker-compose.local.yml"
 if (Test-Path $dockerFile) {
     $content = Get-Content $dockerFile -Raw
+    $content = $content -replace "13000:3000", "$FrontendPort`:3000"
     $content = $content -replace "13002:8080", "$ApiPort`:8080"
     $content = $content -replace "13004:5432", "$DbPort`:5432"
     Set-Content $dockerFile $content -NoNewline -Encoding UTF8
@@ -55,7 +58,7 @@ if (Test-Path $dockerFile) {
 }
 
 # Update appsettings.Development.json (DB Port)
-$appSettingsDev = "src\MyProject.WebApi\appsettings.Development.json"
+$appSettingsDev = "src\backend\MyProject.WebApi\appsettings.Development.json"
 if (Test-Path $appSettingsDev) {
     $content = Get-Content $appSettingsDev -Raw
     $content = $content -replace "Port=13004", "Port=$DbPort"
@@ -63,11 +66,21 @@ if (Test-Path $appSettingsDev) {
 }
 
 # Update http-client.env.json (API Port)
-$httpClientEnv = "src\MyProject.WebApi\http-client.env.json"
+$httpClientEnv = "src\backend\MyProject.WebApi\http-client.env.json"
 if (Test-Path $httpClientEnv) {
     $content = Get-Content $httpClientEnv -Raw
     $content = $content -replace "localhost:13002", "localhost:$ApiPort"
     Set-Content $httpClientEnv $content -NoNewline -Encoding UTF8
+}
+
+# Create and update frontend .env.local
+$frontendEnvExample = "src\frontend\.env.example"
+$frontendEnvLocal = "src\frontend\.env.local"
+if (Test-Path $frontendEnvExample) {
+    Copy-Item $frontendEnvExample $frontendEnvLocal -Force
+    $content = Get-Content $frontendEnvLocal -Raw
+    $content = $content -replace "localhost:13002", "localhost:$ApiPort"
+    Set-Content $frontendEnvLocal $content -NoNewline -Encoding UTF8
 }
 
 # 4. Rename Project
@@ -139,7 +152,7 @@ $migConfirm = Read-Host "Do you want to reset and create a fresh Initial Migrati
 if ($migConfirm -eq "y" -or $migConfirm -eq "Y") {
     Write-Host "Resetting migrations..."
     
-    $migrationDir = "src\$NewName.Infrastructure\Features\Postgres\Migrations"
+    $migrationDir = "src\backend\$NewName.Infrastructure\Features\Postgres\Migrations"
     
     if (Test-Path $migrationDir) {
         Remove-Item "$migrationDir\*" -Recurse -Force
@@ -155,13 +168,13 @@ if ($migConfirm -eq "y" -or $migConfirm -eq "Y") {
 
     # Restore and build explicitly
     Write-Host "Restoring dependencies..."
-    dotnet restore "src\$NewName.WebApi"
+    dotnet restore "src\backend\$NewName.WebApi"
 
     Write-Host "Building project..."
-    dotnet build "src\$NewName.WebApi" --no-restore
+    dotnet build "src\backend\$NewName.WebApi" --no-restore
 
     Write-Host "Running migrations..."
-    dotnet ef migrations add Initial --project "src\$NewName.Infrastructure" --startup-project "src\$NewName.WebApi" --output-dir Features/Postgres/Migrations --no-build
+    dotnet ef migrations add Initial --project "src\backend\$NewName.Infrastructure" --startup-project "src\backend\$NewName.WebApi" --output-dir Features/Postgres/Migrations --no-build
     
     Write-Host "Migration 'Initial' created successfully."
 
