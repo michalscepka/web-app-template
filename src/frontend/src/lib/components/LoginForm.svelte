@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { client } from '$lib/api/client';
+	import { cn } from '$lib/utils';
 	import { onMount } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
@@ -8,6 +9,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Alert from '$lib/components/ui/alert';
 	import { CircleAlert } from 'lucide-svelte';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
 	let { apiUrl } = $props();
 
@@ -47,7 +49,10 @@
 	}
 </script>
 
-<div class="flex min-h-full flex-col justify-center py-12 sm:px-6 lg:px-8">
+<div class="flex min-h-screen flex-col justify-center px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+	<div class="absolute top-4 right-4">
+		<ThemeToggle />
+	</div>
 	<div class="sm:mx-auto sm:w-full sm:max-w-md">
 		<Card.Root>
 			<Card.Header>
@@ -59,7 +64,7 @@
 						class="group flex items-center gap-x-2 rounded-full bg-secondary px-4 py-1 text-sm font-medium text-secondary-foreground shadow-sm ring-1 ring-border hover:bg-secondary/80"
 					>
 						<div
-							class={`h-1.5 w-1.5 rounded-full ${isApiOnline ? 'bg-green-500' : 'bg-red-500'}`}
+							class={cn('h-1.5 w-1.5 rounded-full', isApiOnline ? 'bg-success' : 'bg-destructive')}
 						></div>
 						<span class="group-hover:hidden"
 							>{isApiOnline ? 'API is online' : 'API is offline'}</span
