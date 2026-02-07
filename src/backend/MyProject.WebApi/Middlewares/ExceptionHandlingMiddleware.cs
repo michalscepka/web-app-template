@@ -35,7 +35,8 @@ public class ExceptionHandlingMiddleware(
         catch (Exception e)
         {
             logger.LogError(e, "An unhandled exception occurred.");
-            await HandleExceptionAsync(context, e, HttpStatusCode.InternalServerError);
+            await HandleExceptionAsync(context, e, HttpStatusCode.InternalServerError,
+                customMessage: "An internal error occurred.");
         }
     }
 
