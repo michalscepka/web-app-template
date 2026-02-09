@@ -3,6 +3,7 @@ using MyProject.Domain;
 using static MyProject.Domain.ErrorMessages;
 using MyProject.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyProject.Application.Persistence;
 using MyProject.Infrastructure.Persistence.Extensions;
 
@@ -12,7 +13,9 @@ namespace MyProject.Infrastructure.Persistence;
 /// Generic EF Core implementation of <see cref="IBaseEntityRepository{TEntity}"/> with soft-delete support.
 /// </summary>
 /// <remarks>Pattern documented in src/backend/AGENTS.md — update both when changing.</remarks>
-internal class BaseEntityRepository<TEntity>(MyProjectDbContext dbContext)
+internal class BaseEntityRepository<TEntity>(
+    MyProjectDbContext dbContext,
+    ILogger<BaseEntityRepository<TEntity>> logger)
     : IBaseEntityRepository<TEntity>
     where TEntity : BaseEntity
 {
@@ -59,7 +62,8 @@ internal class BaseEntityRepository<TEntity>(MyProjectDbContext dbContext)
         }
         catch (Exception ex)
         {
-            return Result<TEntity>.Failure($"Failed to add entity: {ex.Message}");
+            logger.LogError(ex, "Failed to add entity of type {EntityType}.", typeof(TEntity).Name);
+            return Result<TEntity>.Failure(Entity.AddFailed);
         }
     }
 
