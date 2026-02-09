@@ -26,4 +26,14 @@ internal static class SeedUsers
     /// Password for the default admin user.
     /// </summary>
     public const string AdminPassword = "AdminUser123!";
+
+    /// <summary>
+    /// Email address for the default super admin user.
+    /// </summary>
+    public const string SuperAdminEmail = "superadmin@test.com";
+
+    /// <summary>
+    /// Password for the default super admin user.
+    /// </summary>
+    public const string SuperAdminPassword = "SuperAdmin123!";
 }
