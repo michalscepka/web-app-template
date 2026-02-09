@@ -37,7 +37,7 @@
 				</a>
 			</div>
 			<div class="space-y-1">
-				<SidebarNav {collapsed} />
+				<SidebarNav {collapsed} {user} />
 			</div>
 		</div>
 	</div>
