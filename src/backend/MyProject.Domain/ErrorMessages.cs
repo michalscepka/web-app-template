@@ -46,6 +46,8 @@ public static class ErrorMessages
     public static class Admin
     {
         public const string HierarchyInsufficient = "You do not have sufficient privileges to manage this user.";
+        public const string RoleAssignAboveRank = "Cannot assign a role at or above your own rank.";
+        public const string RoleRemoveAboveRank = "Cannot remove a role at or above your own rank.";
         public const string RoleSelfRemove = "Cannot remove a role from your own account.";
         public const string LockSelfAction = "Cannot lock your own account.";
         public const string DeleteSelfAction = "Cannot delete your own account.";

@@ -94,8 +94,6 @@ export function mapFieldErrors(
  * 4. Fallback string
  *
  * The backend always returns specific, descriptive English messages.
- * The `errorCode` field remains available on responses for programmatic
- * handling (e.g., switching on specific error codes in UI logic).
  *
  * @param error - The error object from the API response
  * @param fallback - Fallback message if no error message can be extracted

@@ -101,7 +101,7 @@ internal class AdminService(
 
         if (AppRoles.GetRoleRank(input.Role) >= callerRank)
         {
-            return Result.Failure("Cannot assign a role at or above your own rank.");
+            return Result.Failure(ErrorMessages.Admin.RoleAssignAboveRank);
         }
 
         if (await userManager.IsInRoleAsync(user, input.Role))
@@ -156,7 +156,7 @@ internal class AdminService(
 
         if (AppRoles.GetRoleRank(role) >= callerRank)
         {
-            return Result.Failure("Cannot remove a role at or above your own rank.");
+            return Result.Failure(ErrorMessages.Admin.RoleRemoveAboveRank);
         }
 
         if (!await userManager.IsInRoleAsync(user, role))
