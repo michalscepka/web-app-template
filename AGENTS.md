@@ -144,6 +144,35 @@ When creating GitHub issues, use `gh issue create` with:
 - **Body**: Problem description, proposed fix, and affected files
 - **Labels**: Apply all relevant labels from the table below
 
+#### Breaking Down Large Issues
+
+When an issue spans multiple layers (backend + frontend), involves multiple logical steps, or could realistically be worked on by different developers in parallel, break it into **sub-issues**. The parent issue describes the overall goal; sub-issues are independently deliverable units of work.
+
+Use `gh issue create` for each sub-issue and link them to the parent with a task list in the parent body:
+
+```markdown
+## Sub-issues
+
+- [ ] #101 — feat(auth): add change password endpoint (backend)
+- [ ] #102 — feat(auth): add change password form (frontend)
+```
+
+**When to split:**
+
+| Signal | Example |
+|---|---|
+| Crosses stack boundary | Backend endpoint + frontend page → separate issues |
+| Independent deliverables | Database migration + service + controller could each be reviewed alone |
+| Multiple logical concerns | New entity + new API + new UI page + new i18n keys |
+| Parallelizable work | Two developers could work on different sub-issues simultaneously |
+
+**When NOT to split:**
+
+- Small, tightly coupled changes that only make sense together (e.g., adding a DTO and its validator)
+- Single-layer fixes that take one commit (e.g., fixing a typo, adding an index)
+
+Each sub-issue gets its own branch, PR, and labels — same conventions as any other issue. The parent issue is closed when all sub-issues are done.
+
 ### Pull Requests
 
 When the user asks to create a PR, use `gh pr create` with:
