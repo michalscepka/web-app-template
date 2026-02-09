@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyProject.Application.Features.Admin;
@@ -56,9 +57,9 @@ public class AdminController(IAdminService adminService) : ApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AdminUserResponse>> GetUser(Guid id, CancellationToken cancellationToken)
     {
-        var result = await adminService.GetUserByIdAsync(id, cancellationToken);
+        var output = await adminService.GetUserByIdAsync(id, cancellationToken);
 
-        return Ok(result.Value!.ToResponse());
+        return Ok(output.ToResponse());
     }
 
     /// <summary>
@@ -112,6 +113,11 @@ public class AdminController(IAdminService adminService) : ApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> RemoveRole(Guid id, string role, CancellationToken cancellationToken)
     {
+        if (string.Equals(role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase) && IsCurrentUser(id))
+        {
+            return BadRequest(new ErrorResponse { Message = "Cannot remove the Admin role from your own account." });
+        }
+
         var result = await adminService.RemoveRoleAsync(id, role, cancellationToken);
 
         if (!result.IsSuccess)
@@ -140,6 +146,11 @@ public class AdminController(IAdminService adminService) : ApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> LockUser(Guid id, CancellationToken cancellationToken)
     {
+        if (IsCurrentUser(id))
+        {
+            return BadRequest(new ErrorResponse { Message = "Cannot lock your own account." });
+        }
+
         var result = await adminService.LockUserAsync(id, cancellationToken);
 
         if (!result.IsSuccess)
@@ -196,6 +207,11 @@ public class AdminController(IAdminService adminService) : ApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> DeleteUser(Guid id, CancellationToken cancellationToken)
     {
+        if (IsCurrentUser(id))
+        {
+            return BadRequest(new ErrorResponse { Message = "Cannot delete your own account." });
+        }
+
         var result = await adminService.DeleteUserAsync(id, cancellationToken);
 
         if (!result.IsSuccess)
@@ -223,5 +239,12 @@ public class AdminController(IAdminService adminService) : ApiController
         var roles = await adminService.GetRolesAsync(cancellationToken);
 
         return Ok(roles.Select(r => r.ToResponse()).ToList());
+    }
+
+    private bool IsCurrentUser(Guid targetUserId)
+    {
+        var currentUserIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        return Guid.TryParse(currentUserIdClaim, out var currentUserId) && currentUserId == targetUserId;
     }
 }

@@ -46,13 +46,13 @@ internal class AdminService(
             .Paginate(pageNumber, pageSize)
             .ToListAsync(cancellationToken);
 
-        var userOutputs = await MapUsersToOutputsAsync(users);
+        var userOutputs = await MapUsersToOutputsAsync(users, cancellationToken);
 
         return new AdminUserListOutput(userOutputs, totalCount, pageNumber, pageSize);
     }
 
     /// <inheritdoc />
-    public async Task<Result<AdminUserOutput>> GetUserByIdAsync(Guid userId,
+    public async Task<AdminUserOutput> GetUserByIdAsync(Guid userId,
         CancellationToken cancellationToken = default)
     {
         var user = await userManager.FindByIdAsync(userId.ToString());
@@ -62,8 +62,7 @@ internal class AdminService(
             throw new KeyNotFoundException($"User with ID '{userId}' was not found.");
         }
 
-        var output = await MapUserToOutputAsync(user);
-        return Result<AdminUserOutput>.Success(output);
+        return await MapUserToOutputAsync(user, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -221,64 +220,79 @@ internal class AdminService(
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        var roleOutputs = new List<AdminRoleOutput>(roles.Count);
+        var roleCounts = await dbContext.UserRoles
+            .GroupBy(ur => ur.RoleId)
+            .Select(g => new { RoleId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.RoleId, x => x.Count, cancellationToken);
 
-        foreach (var role in roles)
-        {
-            var userCount = await dbContext.UserRoles
-                .CountAsync(ur => ur.RoleId == role.Id, cancellationToken);
-
-            roleOutputs.Add(new AdminRoleOutput(role.Id, role.Name!, userCount));
-        }
-
-        return roleOutputs;
+        return roles
+            .Select(role => new AdminRoleOutput(
+                role.Id,
+                role.Name ?? string.Empty,
+                roleCounts.GetValueOrDefault(role.Id)))
+            .ToList();
     }
 
     private async Task<IReadOnlyList<AdminUserOutput>> MapUsersToOutputsAsync(
-        IReadOnlyList<ApplicationUser> users)
+        IReadOnlyList<ApplicationUser> users, CancellationToken cancellationToken)
     {
-        var outputs = new List<AdminUserOutput>(users.Count);
         var now = timeProvider.GetUtcNow();
 
-        foreach (var user in users)
+        var userIds = users.Select(u => u.Id).ToList();
+
+        var userRolesMap = await dbContext.UserRoles
+            .Where(ur => userIds.Contains(ur.UserId))
+            .Join(dbContext.Roles, ur => ur.RoleId, r => r.Id,
+                (ur, r) => new { ur.UserId, RoleName = r.Name ?? string.Empty })
+            .GroupBy(x => x.UserId)
+            .ToDictionaryAsync(
+                g => g.Key,
+                g => g.Select(x => x.RoleName).ToList(),
+                cancellationToken);
+
+        return users.Select(user =>
         {
-            var roles = await userManager.GetRolesAsync(user);
+            var roles = userRolesMap.GetValueOrDefault(user.Id, []);
             var isLockedOut = user.LockoutEnd.HasValue && user.LockoutEnd > now;
 
-            outputs.Add(new AdminUserOutput(
+            return new AdminUserOutput(
                 Id: user.Id,
-                UserName: user.UserName!,
+                UserName: user.UserName ?? string.Empty,
                 FirstName: user.FirstName,
                 LastName: user.LastName,
                 PhoneNumber: user.PhoneNumber,
                 Bio: user.Bio,
                 AvatarUrl: user.AvatarUrl,
-                Roles: roles.ToList(),
+                Roles: roles,
                 EmailConfirmed: user.EmailConfirmed,
                 LockoutEnabled: user.LockoutEnabled,
                 LockoutEnd: user.LockoutEnd,
                 AccessFailedCount: user.AccessFailedCount,
-                IsLockedOut: isLockedOut));
-        }
-
-        return outputs;
+                IsLockedOut: isLockedOut);
+        }).ToList();
     }
 
-    private async Task<AdminUserOutput> MapUserToOutputAsync(ApplicationUser user)
+    private async Task<AdminUserOutput> MapUserToOutputAsync(ApplicationUser user,
+        CancellationToken cancellationToken)
     {
-        var roles = await userManager.GetRolesAsync(user);
+        var roleNames = await dbContext.UserRoles
+            .Where(ur => ur.UserId == user.Id)
+            .Join(dbContext.Roles, ur => ur.RoleId, r => r.Id,
+                (_, r) => r.Name ?? string.Empty)
+            .ToListAsync(cancellationToken);
+
         var now = timeProvider.GetUtcNow();
         var isLockedOut = user.LockoutEnd.HasValue && user.LockoutEnd > now;
 
         return new AdminUserOutput(
             Id: user.Id,
-            UserName: user.UserName!,
+            UserName: user.UserName ?? string.Empty,
             FirstName: user.FirstName,
             LastName: user.LastName,
             PhoneNumber: user.PhoneNumber,
             Bio: user.Bio,
             AvatarUrl: user.AvatarUrl,
-            Roles: roles.ToList(),
+            Roles: roleNames,
             EmailConfirmed: user.EmailConfirmed,
             LockoutEnabled: user.LockoutEnabled,
             LockoutEnd: user.LockoutEnd,

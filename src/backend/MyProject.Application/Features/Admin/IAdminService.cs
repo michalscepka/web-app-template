@@ -25,8 +25,9 @@ public interface IAdminService
     /// </summary>
     /// <param name="userId">The user ID.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns>The user details, or failure if not found.</returns>
-    Task<Result<AdminUserOutput>> GetUserByIdAsync(Guid userId, CancellationToken cancellationToken = default);
+    /// <returns>The user details.</returns>
+    /// <exception cref="KeyNotFoundException">Thrown when the user is not found.</exception>
+    Task<AdminUserOutput> GetUserByIdAsync(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Assigns a role to a user.
