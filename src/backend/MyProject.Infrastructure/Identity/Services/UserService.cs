@@ -35,7 +35,7 @@ internal class UserService(
 
         if (!userId.HasValue)
         {
-            return Result<UserOutput>.Failure("User is not authenticated.");
+            return Result<UserOutput>.Failure("User is not authenticated.", ErrorCodes.User.NotAuthenticated);
         }
 
         var cacheKey = CacheKeys.User(userId.Value);
@@ -50,7 +50,7 @@ internal class UserService(
 
         if (user is null)
         {
-            return Result<UserOutput>.Failure("User not found.");
+            return Result<UserOutput>.Failure("User not found.", ErrorCodes.User.NotFound);
         }
 
         var roles = await userManager.GetRolesAsync(user);
@@ -90,14 +90,14 @@ internal class UserService(
 
         if (!userId.HasValue)
         {
-            return Result<UserOutput>.Failure("User is not authenticated.");
+            return Result<UserOutput>.Failure("User is not authenticated.", ErrorCodes.User.NotAuthenticated);
         }
 
         var user = await userManager.FindByIdAsync(userId.Value.ToString());
 
         if (user is null)
         {
-            return Result<UserOutput>.Failure("User not found.");
+            return Result<UserOutput>.Failure("User not found.", ErrorCodes.User.NotFound);
         }
 
         user.FirstName = input.FirstName;
@@ -111,7 +111,7 @@ internal class UserService(
         if (!result.Succeeded)
         {
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            return Result<UserOutput>.Failure(errors);
+            return Result<UserOutput>.Failure(errors, ErrorCodes.User.UpdateFailed);
         }
 
         // Invalidate cache after update
@@ -140,21 +140,21 @@ internal class UserService(
 
         if (!userId.HasValue)
         {
-            return Result.Failure("User is not authenticated.");
+            return Result.Failure("User is not authenticated.", ErrorCodes.User.NotAuthenticated);
         }
 
         var user = await userManager.FindByIdAsync(userId.Value.ToString());
 
         if (user is null)
         {
-            return Result.Failure("User not found.");
+            return Result.Failure("User not found.", ErrorCodes.User.NotFound);
         }
 
         var passwordValid = await userManager.CheckPasswordAsync(user, input.Password);
 
         if (!passwordValid)
         {
-            return Result.Failure("Invalid password.");
+            return Result.Failure("Invalid password.", ErrorCodes.User.DeleteInvalidPassword);
         }
 
         var lastAdminResult = await EnforceLastAdminProtectionForDeletionAsync(user, cancellationToken);
@@ -190,7 +190,8 @@ internal class UserService(
             if (usersInRoleCount <= 1)
             {
                 return Result.Failure(
-                    $"Cannot delete your account — you are the last user with the '{role}' role.");
+                    $"Cannot delete your account — you are the last user with the '{role}' role.",
+                    ErrorCodes.User.DeleteLastRole);
             }
         }
 

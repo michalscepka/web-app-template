@@ -58,7 +58,7 @@ internal class BaseEntityRepository<TEntity>(MyProjectDbContext dbContext)
         }
         catch (Exception ex)
         {
-            return Result<TEntity>.Failure($"Failed to add entity: {ex.Message}");
+            return Result<TEntity>.Failure($"Failed to add entity: {ex.Message}", ErrorCodes.Entity.AddFailed);
         }
     }
 
@@ -74,7 +74,7 @@ internal class BaseEntityRepository<TEntity>(MyProjectDbContext dbContext)
         var entity = await _dbSet.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
         if (entity is null)
         {
-            return Result<TEntity>.Failure($"Entity with ID {id} not found or already deleted.");
+            return Result<TEntity>.Failure($"Entity with ID {id} not found or already deleted.", ErrorCodes.Entity.NotFound);
         }
 
         entity.SoftDelete();
@@ -90,7 +90,7 @@ internal class BaseEntityRepository<TEntity>(MyProjectDbContext dbContext)
             .FirstOrDefaultAsync(e => e.Id == id && e.IsDeleted, cancellationToken);
         if (entity is null)
         {
-            return Result<TEntity>.Failure($"Entity with ID {id} not found or not deleted.");
+            return Result<TEntity>.Failure($"Entity with ID {id} not found or not deleted.", ErrorCodes.Entity.NotDeleted);
         }
 
         entity.Restore();
