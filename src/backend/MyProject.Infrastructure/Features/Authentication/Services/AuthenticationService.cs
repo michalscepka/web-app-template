@@ -107,7 +107,8 @@ internal class AuthenticationService(
         if (!result.Succeeded)
         {
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            return Result<Guid>.Failure(errors, ErrorCodes.Auth.RegisterFailed);
+            var errorCode = MapRegistrationIdentityError(result.Errors);
+            return Result<Guid>.Failure(errors, errorCode);
         }
 
         var roleResult = await userManager.AddToRoleAsync(user, AppRoles.User);
@@ -261,12 +262,52 @@ internal class AuthenticationService(
         if (!changeResult.Succeeded)
         {
             var errors = string.Join(", ", changeResult.Errors.Select(e => e.Description));
-            return Result.Failure(errors, ErrorCodes.Auth.PasswordChangeFailed);
+            var errorCode = MapPasswordIdentityError(changeResult.Errors);
+            return Result.Failure(errors, errorCode);
         }
 
         await RevokeUserTokens(userId.Value, cancellationToken);
 
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Maps the first ASP.NET Identity error from a registration attempt to a specific error code.
+    /// </summary>
+    private static string MapRegistrationIdentityError(IEnumerable<IdentityError> errors)
+    {
+        var code = errors.FirstOrDefault()?.Code;
+        return code switch
+        {
+            "DuplicateEmail" or "DuplicateUserName" => ErrorCodes.Auth.RegisterDuplicateEmail,
+            "InvalidEmail" => ErrorCodes.Auth.RegisterInvalidEmail,
+            "InvalidUserName" => ErrorCodes.Auth.RegisterInvalidEmail,
+            "PasswordTooShort" => ErrorCodes.Auth.RegisterPasswordTooShort,
+            "PasswordRequiresDigit" => ErrorCodes.Auth.RegisterPasswordRequiresDigit,
+            "PasswordRequiresLower" => ErrorCodes.Auth.RegisterPasswordRequiresLower,
+            "PasswordRequiresUpper" => ErrorCodes.Auth.RegisterPasswordRequiresUpper,
+            "PasswordRequiresNonAlphanumeric" => ErrorCodes.Auth.RegisterPasswordRequiresNonAlphanumeric,
+            "PasswordRequiresUniqueChars" => ErrorCodes.Auth.RegisterPasswordRequiresUniqueChars,
+            _ => ErrorCodes.Auth.RegisterFailed
+        };
+    }
+
+    /// <summary>
+    /// Maps the first ASP.NET Identity error from a password change attempt to a specific error code.
+    /// </summary>
+    private static string MapPasswordIdentityError(IEnumerable<IdentityError> errors)
+    {
+        var code = errors.FirstOrDefault()?.Code;
+        return code switch
+        {
+            "PasswordTooShort" => ErrorCodes.Auth.PasswordTooShort,
+            "PasswordRequiresDigit" => ErrorCodes.Auth.PasswordRequiresDigit,
+            "PasswordRequiresLower" => ErrorCodes.Auth.PasswordRequiresLower,
+            "PasswordRequiresUpper" => ErrorCodes.Auth.PasswordRequiresUpper,
+            "PasswordRequiresNonAlphanumeric" => ErrorCodes.Auth.PasswordRequiresNonAlphanumeric,
+            "PasswordRequiresUniqueChars" => ErrorCodes.Auth.PasswordRequiresUniqueChars,
+            _ => ErrorCodes.Auth.PasswordChangeFailed
+        };
     }
 
     private async Task RevokeUserTokens(Guid userId, CancellationToken cancellationToken = default)

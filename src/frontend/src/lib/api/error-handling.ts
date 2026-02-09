@@ -99,6 +99,15 @@ const errorCodeMessages: Record<string, () => string> = {
 	'auth.login.accountLocked': m.apiError_auth_login_accountLocked,
 	// Auth — registration
 	'auth.register.failed': m.apiError_auth_register_failed,
+	'auth.register.duplicateEmail': m.apiError_auth_register_duplicateEmail,
+	'auth.register.invalidEmail': m.apiError_auth_register_invalidEmail,
+	'auth.register.passwordTooShort': m.apiError_auth_register_passwordTooShort,
+	'auth.register.passwordRequiresDigit': m.apiError_auth_register_passwordRequiresDigit,
+	'auth.register.passwordRequiresLower': m.apiError_auth_register_passwordRequiresLower,
+	'auth.register.passwordRequiresUpper': m.apiError_auth_register_passwordRequiresUpper,
+	'auth.register.passwordRequiresNonAlphanumeric':
+		m.apiError_auth_register_passwordRequiresNonAlphanumeric,
+	'auth.register.passwordRequiresUniqueChars': m.apiError_auth_register_passwordRequiresUniqueChars,
 	'auth.register.roleAssignFailed': m.apiError_auth_register_roleAssignFailed,
 	// Auth — tokens
 	'auth.token.missing': m.apiError_auth_token_missing,
@@ -113,10 +122,19 @@ const errorCodeMessages: Record<string, () => string> = {
 	// Auth — password
 	'auth.password.incorrect': m.apiError_auth_password_incorrect,
 	'auth.password.changeFailed': m.apiError_auth_password_changeFailed,
+	'auth.password.tooShort': m.apiError_auth_password_tooShort,
+	'auth.password.requiresDigit': m.apiError_auth_password_requiresDigit,
+	'auth.password.requiresLower': m.apiError_auth_password_requiresLower,
+	'auth.password.requiresUpper': m.apiError_auth_password_requiresUpper,
+	'auth.password.requiresNonAlphanumeric': m.apiError_auth_password_requiresNonAlphanumeric,
+	'auth.password.requiresUniqueChars': m.apiError_auth_password_requiresUniqueChars,
 	// User — self-service
 	'user.notAuthenticated': m.apiError_user_notAuthenticated,
 	'user.notFound': m.apiError_user_notFound,
 	'user.updateFailed': m.apiError_user_updateFailed,
+	'user.update.duplicateEmail': m.apiError_user_update_duplicateEmail,
+	'user.update.invalidEmail': m.apiError_user_update_invalidEmail,
+	'user.update.concurrencyFailure': m.apiError_user_update_concurrencyFailure,
 	'user.delete.invalidPassword': m.apiError_user_delete_invalidPassword,
 	'user.delete.lastRole': m.apiError_user_delete_lastRole,
 	// Admin — user management

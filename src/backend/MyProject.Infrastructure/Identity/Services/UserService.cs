@@ -111,7 +111,8 @@ internal class UserService(
         if (!result.Succeeded)
         {
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            return Result<UserOutput>.Failure(errors, ErrorCodes.User.UpdateFailed);
+            var errorCode = MapUpdateIdentityError(result.Errors);
+            return Result<UserOutput>.Failure(errors, errorCode);
         }
 
         // Invalidate cache after update
@@ -169,6 +170,22 @@ internal class UserService(
         await InvalidateUserCache(userId.Value);
 
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Maps the first ASP.NET Identity error from a profile update attempt to a specific error code.
+    /// </summary>
+    private static string MapUpdateIdentityError(IEnumerable<IdentityError> errors)
+    {
+        var code = errors.FirstOrDefault()?.Code;
+        return code switch
+        {
+            "DuplicateEmail" or "DuplicateUserName" => ErrorCodes.User.UpdateDuplicateEmail,
+            "InvalidEmail" => ErrorCodes.User.UpdateInvalidEmail,
+            "InvalidUserName" => ErrorCodes.User.UpdateInvalidEmail,
+            "ConcurrencyFailure" => ErrorCodes.User.UpdateConcurrencyFailure,
+            _ => ErrorCodes.User.UpdateFailed
+        };
     }
 
     /// <summary>

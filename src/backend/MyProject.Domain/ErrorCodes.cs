@@ -17,6 +17,14 @@ public static class ErrorCodes
         public const string LoginInvalidCredentials = "auth.login.invalidCredentials";
         public const string LoginAccountLocked = "auth.login.accountLocked";
         public const string RegisterFailed = "auth.register.failed";
+        public const string RegisterDuplicateEmail = "auth.register.duplicateEmail";
+        public const string RegisterInvalidEmail = "auth.register.invalidEmail";
+        public const string RegisterPasswordTooShort = "auth.register.passwordTooShort";
+        public const string RegisterPasswordRequiresDigit = "auth.register.passwordRequiresDigit";
+        public const string RegisterPasswordRequiresLower = "auth.register.passwordRequiresLower";
+        public const string RegisterPasswordRequiresUpper = "auth.register.passwordRequiresUpper";
+        public const string RegisterPasswordRequiresNonAlphanumeric = "auth.register.passwordRequiresNonAlphanumeric";
+        public const string RegisterPasswordRequiresUniqueChars = "auth.register.passwordRequiresUniqueChars";
         public const string RegisterRoleAssignFailed = "auth.register.roleAssignFailed";
         public const string TokenMissing = "auth.token.missing";
         public const string TokenNotFound = "auth.token.notFound";
@@ -28,6 +36,12 @@ public static class ErrorCodes
         public const string UserNotFound = "auth.userNotFound";
         public const string PasswordIncorrect = "auth.password.incorrect";
         public const string PasswordChangeFailed = "auth.password.changeFailed";
+        public const string PasswordTooShort = "auth.password.tooShort";
+        public const string PasswordRequiresDigit = "auth.password.requiresDigit";
+        public const string PasswordRequiresLower = "auth.password.requiresLower";
+        public const string PasswordRequiresUpper = "auth.password.requiresUpper";
+        public const string PasswordRequiresNonAlphanumeric = "auth.password.requiresNonAlphanumeric";
+        public const string PasswordRequiresUniqueChars = "auth.password.requiresUniqueChars";
     }
 
     /// <summary>
@@ -38,6 +52,9 @@ public static class ErrorCodes
         public const string NotAuthenticated = "user.notAuthenticated";
         public const string NotFound = "user.notFound";
         public const string UpdateFailed = "user.updateFailed";
+        public const string UpdateDuplicateEmail = "user.update.duplicateEmail";
+        public const string UpdateInvalidEmail = "user.update.invalidEmail";
+        public const string UpdateConcurrencyFailure = "user.update.concurrencyFailure";
         public const string DeleteInvalidPassword = "user.delete.invalidPassword";
         public const string DeleteLastRole = "user.delete.lastRole";
     }
