@@ -191,6 +191,19 @@
 	"error_default_description": "Something went wrong. We're not sure what, but it's probably not good.",
 	"error_goHome": "Go back home",
 
+	"settings_deleteAccount_dangerZone": "Danger Zone",
+	"settings_deleteAccount_dangerDescription": "Once you delete your account, there is no going back. All your data will be permanently removed.",
+	"settings_deleteAccount_title": "Delete Account",
+	"settings_deleteAccount_description": "Permanently delete your account and all associated data.",
+	"settings_deleteAccount_dialogTitle": "Delete Account",
+	"settings_deleteAccount_dialogDescription": "This action is irreversible. All your data will be permanently deleted. Please enter your password to confirm.",
+	"settings_deleteAccount_password": "Password",
+	"settings_deleteAccount_passwordPlaceholder": "Enter your password",
+	"settings_deleteAccount_confirm": "Delete My Account",
+	"settings_deleteAccount_cancel": "Cancel",
+	"settings_deleteAccount_success": "Your account has been deleted.",
+	"settings_deleteAccount_error": "Failed to delete account",
+
 	"theme_light": "Light",
 	"theme_dark": "Dark",
 	"theme_system": "System"

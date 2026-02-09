@@ -191,6 +191,19 @@
 	"error_default_description": "Něco se pokazilo. Nejsme si jistí co, ale pravděpodobně to není dobré.",
 	"error_goHome": "Zpět na úvod",
 
+	"settings_deleteAccount_dangerZone": "Nebezpečná zóna",
+	"settings_deleteAccount_dangerDescription": "Jakmile smažete svůj účet, není cesty zpět. Všechna vaše data budou trvale odstraněna.",
+	"settings_deleteAccount_title": "Smazat účet",
+	"settings_deleteAccount_description": "Trvale smazat váš účet a všechna přidružená data.",
+	"settings_deleteAccount_dialogTitle": "Smazat účet",
+	"settings_deleteAccount_dialogDescription": "Tato akce je nevratná. Všechna vaše data budou trvale smazána. Pro potvrzení zadejte své heslo.",
+	"settings_deleteAccount_password": "Heslo",
+	"settings_deleteAccount_passwordPlaceholder": "Zadejte své heslo",
+	"settings_deleteAccount_confirm": "Smazat můj účet",
+	"settings_deleteAccount_cancel": "Zrušit",
+	"settings_deleteAccount_success": "Váš účet byl smazán.",
+	"settings_deleteAccount_error": "Nepodařilo se smazat účet",
+
 	"theme_light": "Světlý",
 	"theme_dark": "Tmavý",
 	"theme_system": "Systémový"

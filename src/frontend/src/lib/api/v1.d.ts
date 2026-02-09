@@ -43,7 +43,48 @@ export interface paths {
 		};
 		put?: never;
 		post?: never;
-		delete?: never;
+		/** Permanently deletes the current authenticated user's account. Requires password confirmation. Revokes all tokens and clears auth cookies. */
+		delete: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description The account deletion request containing the user's password */
+			requestBody: {
+				content: {
+					'application/json': components['schemas']['DeleteAccountRequest'];
+				};
+			};
+			responses: {
+				/** @description Account successfully deleted */
+				204: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content?: never;
+				};
+				/** @description If the password is incorrect or the request is invalid */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						'application/json': components['schemas']['ErrorResponse'];
+					};
+				};
+				/** @description If the user is not authenticated */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						'application/json': components['schemas']['ProblemDetails'];
+					};
+				};
+			};
+		};
 		options?: never;
 		head?: never;
 		/** Updates the current authenticated user's profile information */
@@ -400,6 +441,11 @@ export interface components {
 			message?: null | string;
 			/** @description Additional error details or technical information. */
 			details?: null | string;
+		};
+		/** @description Represents a request to permanently delete the current user's account. */
+		DeleteAccountRequest: {
+			/** @description The user's current password for confirmation. */
+			password: string;
 		};
 		/** @description Represents a user login request with credentials. */
 		LoginRequest: {
