@@ -63,6 +63,7 @@ public static class ApplicationBuilderExtensions
 
         await SeedUserAsync(userManager, SeedUsers.TestUserEmail, SeedUsers.TestUserPassword, AppRoles.User);
         await SeedUserAsync(userManager, SeedUsers.AdminEmail, SeedUsers.AdminPassword, AppRoles.Admin);
+        await SeedUserAsync(userManager, SeedUsers.SuperAdminEmail, SeedUsers.SuperAdminPassword, AppRoles.SuperAdmin);
     }
 
     private static async Task SeedUserAsync(
