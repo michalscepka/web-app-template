@@ -136,6 +136,14 @@ Keep diagrams focused — one concern per diagram, prefer a few clear diagrams o
 
 Work on the current branch unless instructed otherwise. For new branches: `feat/{name}` or `fix/{description}`.
 
+### Issues
+
+When creating GitHub issues, use `gh issue create` with:
+
+- **Title**: Conventional Commit format (`type(scope): description`)
+- **Body**: Problem description, proposed fix, and affected files
+- **Labels**: Apply all relevant labels from the table below
+
 ### Pull Requests
 
 When the user asks to create a PR, use `gh pr create` with:
@@ -143,8 +151,24 @@ When the user asks to create a PR, use `gh pr create` with:
 - **Title**: Conventional Commit format matching the branch scope
 - **Body**: Summary of changes, linked issues if applicable
 - **Base**: `master` (unless instructed otherwise)
+- **Labels**: Apply all relevant labels from the table below
 
 Do **not** create PRs automatically — only when explicitly requested.
+
+### Labels
+
+Always label issues and PRs. Use the project labels below — apply **all** that fit (they are not mutually exclusive). If a new label would genuinely help categorize work and none of the existing ones cover it, create it with `gh label create` before applying.
+
+| Label | Color | Description | Use when |
+|---|---|---|---|
+| `backend` | `#0E8A16` | Backend (.NET) | Changes touch `src/backend/` |
+| `frontend` | `#1D76DB` | Frontend (SvelteKit) | Changes touch `src/frontend/` |
+| `security` | `#D93F0B` | Security-related | Fixes vulnerabilities, hardens config, adds auth features |
+| `feature` | `#5319E7` | New feature or enhancement | Adding new capabilities (not just fixing existing ones) |
+| `bug` | `#d73a4a` | Something isn't working | Fixing incorrect behavior |
+| `documentation` | `#0075ca` | Documentation | Changes to docs, AGENTS.md, session notes |
+
+Unused GitHub default labels (`enhancement`, `good first issue`, `help wanted`, `invalid`, `question`, `wontfix`, `duplicate`) can be ignored — they add noise for a small team. Delete them if they accumulate.
 
 ---
 
