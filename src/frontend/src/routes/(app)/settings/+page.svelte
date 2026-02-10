@@ -18,7 +18,7 @@
 		<p class="text-sm text-muted-foreground">{m.settings_description()}</p>
 	</div>
 	<div class="h-px w-full bg-border"></div>
-	<div class="max-w-2xl space-y-12">
+	<div class="space-y-8">
 		<ChangePasswordForm />
 
 		<div class="space-y-4">
