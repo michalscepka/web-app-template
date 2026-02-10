@@ -11,7 +11,7 @@
 	let { user, roles, currentUser }: Props = $props();
 </script>
 
-<div class="grid gap-6 lg:grid-cols-2">
+<div class="grid gap-6 xl:grid-cols-2">
 	<AccountInfoCard {user} />
 	<UserManagementCard {user} {roles} {currentUser} />
 </div>
