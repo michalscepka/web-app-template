@@ -20,7 +20,7 @@
 	<div class="flex items-center gap-4">
 		<a
 			href={resolve('/admin/users')}
-			class={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-8 w-8')}
+			class={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-10 w-10')}
 			aria-label={m.admin_userDetail_backToUsers()}
 		>
 			<ArrowLeft class="h-4 w-4" />
