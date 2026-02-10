@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Badge } from '$lib/components/ui/badge';
+	import { Shield } from '@lucide/svelte';
 	import type { AdminRole } from '$lib/types';
 	import * as m from '$lib/paraglide/messages';
 
@@ -10,33 +11,50 @@
 	let { roles }: Props = $props();
 </script>
 
-<div class="overflow-x-auto">
-	<table class="w-full text-sm">
-		<thead>
-			<tr class="border-b text-start">
-				<th class="px-3 py-3 text-start font-medium text-muted-foreground">
-					{m.admin_roles_name()}
-				</th>
-				<th class="px-3 py-3 text-end font-medium text-muted-foreground">
-					{m.admin_roles_userCount()}
-				</th>
-			</tr>
-		</thead>
-		<tbody>
-			{#each roles as role (role.id)}
-				<tr class="border-b transition-colors hover:bg-muted/50">
-					<td class="px-3 py-3">
-						<Badge variant="secondary">{role.name}</Badge>
-					</td>
-					<td class="px-3 py-3 text-end tabular-nums">{role.userCount ?? 0}</td>
+{#if roles.length === 0}
+	<div class="flex flex-col items-center justify-center py-12 text-center">
+		<div class="mb-3 rounded-full bg-muted p-3">
+			<Shield class="h-6 w-6 text-muted-foreground" />
+		</div>
+		<p class="text-sm text-muted-foreground">{m.admin_roles_noResults()}</p>
+	</div>
+{:else}
+	<!-- Mobile: card list -->
+	<div class="divide-y md:hidden">
+		{#each roles as role (role.id)}
+			<div class="flex items-center justify-between p-4">
+				<Badge variant="secondary" class="text-sm">{role.name}</Badge>
+				<span class="text-sm text-muted-foreground tabular-nums">
+					{role.userCount ?? 0}
+					{m.admin_roles_userCount().toLowerCase()}
+				</span>
+			</div>
+		{/each}
+	</div>
+
+	<!-- Desktop: table -->
+	<div class="hidden overflow-x-auto md:block">
+		<table class="w-full text-sm">
+			<thead>
+				<tr class="border-b bg-muted/50 text-start">
+					<th class="px-4 py-3 text-start text-xs font-medium tracking-wide text-muted-foreground">
+						{m.admin_roles_name()}
+					</th>
+					<th class="px-4 py-3 text-end text-xs font-medium tracking-wide text-muted-foreground">
+						{m.admin_roles_userCount()}
+					</th>
 				</tr>
-			{:else}
-				<tr>
-					<td colspan="2" class="py-8 text-center text-muted-foreground">
-						{m.admin_roles_noResults()}
-					</td>
-				</tr>
-			{/each}
-		</tbody>
-	</table>
-</div>
+			</thead>
+			<tbody>
+				{#each roles as role (role.id)}
+					<tr class="border-b transition-colors hover:bg-muted/50">
+						<td class="px-4 py-3">
+							<Badge variant="secondary">{role.name}</Badge>
+						</td>
+						<td class="px-4 py-3 text-end tabular-nums">{role.userCount ?? 0}</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	</div>
+{/if}
