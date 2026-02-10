@@ -14,23 +14,23 @@
 </script>
 
 {#if totalPages > 1}
-	<div class="flex items-center justify-center gap-2">
+	<div class="flex items-center justify-center gap-3">
 		<Button
 			variant="outline"
 			size="icon"
-			class="h-8 w-8"
+			class="h-10 w-10"
 			disabled={!hasPreviousPage}
 			onclick={() => onPageChange(pageNumber - 1)}
 		>
 			<ChevronLeft class="h-4 w-4" />
 		</Button>
-		<span class="text-sm text-muted-foreground tabular-nums">
+		<span class="min-w-12 text-center text-sm text-muted-foreground tabular-nums">
 			{pageNumber} / {totalPages}
 		</span>
 		<Button
 			variant="outline"
 			size="icon"
-			class="h-8 w-8"
+			class="h-10 w-10"
 			disabled={!hasNextPage}
 			onclick={() => onPageChange(pageNumber + 1)}
 		>

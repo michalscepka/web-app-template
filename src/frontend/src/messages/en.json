@@ -218,7 +218,6 @@
 	"admin_users_name": "Name",
 	"admin_users_roles": "Roles",
 	"admin_users_status": "Status",
-	"admin_users_actions": "Actions",
 	"admin_users_active": "Active",
 	"admin_users_locked": "Locked",
 	"admin_users_viewDetails": "View details",
@@ -263,6 +262,8 @@
 	"admin_userDetail_deleteCancel": "Cancel",
 	"admin_userDetail_deleteSuccess": "User account deleted",
 	"admin_userDetail_deleteError": "Failed to delete user account",
+	"admin_userDetail_selectRole": "Select a role...",
+	"admin_userDetail_dangerZone": "Danger Zone",
 	"admin_userDetail_cannotManage": "You do not have sufficient privileges to manage this user.",
 
 	"admin_roles_title": "Roles",
