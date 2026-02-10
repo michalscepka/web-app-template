@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -5,7 +6,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using MyProject.Application.Caching;
+using MyProject.Application.Caching.Constants;
 using MyProject.Application.Cookies.Constants;
+using MyProject.Infrastructure.Cryptography;
 using MyProject.Infrastructure.Features.Authentication.Models;
 using MyProject.Infrastructure.Features.Authentication.Options;
 using MyProject.Infrastructure.Features.Authentication.Services;
@@ -75,6 +79,7 @@ public static class ServiceCollectionExtensions
             var authOptions = configuration.GetSection(AuthenticationOptions.SectionName).Get<AuthenticationOptions>()!;
             var jwtOptions = authOptions.Jwt;
             var key = Encoding.UTF8.GetBytes(jwtOptions.Key);
+            var securityStampClaimType = jwtOptions.SecurityStampClaimType;
 
             services.AddAuthentication(options =>
                 {
@@ -116,12 +121,66 @@ public static class ServiceCollectionExtensions
 
                             return Task.CompletedTask;
                         },
+
+                        OnTokenValidated = async context =>
+                        {
+                            await ValidateSecurityStampAsync(context, securityStampClaimType);
+                        },
                     };
 
                     opt.SaveToken = true;
                 });
 
             return services;
+        }
+    }
+
+    /// <summary>
+    /// Validates the security stamp claim in the JWT token against the current stamp in the database.
+    /// Uses Redis caching (5 minute TTL) to avoid a database hit on every request.
+    /// If the stamp has changed (password change, role update, session revocation), the token is rejected.
+    /// </summary>
+    private static async Task ValidateSecurityStampAsync(TokenValidatedContext context, string securityStampClaimType)
+    {
+        var stampClaim = context.Principal?.FindFirstValue(securityStampClaimType);
+        if (string.IsNullOrEmpty(stampClaim))
+        {
+            // Tokens issued before this feature was added won't have the claim — allow them
+            // to pass through. They'll get a stamped token on next refresh.
+            return;
+        }
+
+        var userIdClaim = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdClaim, out var userId))
+        {
+            context.Fail("Invalid user identifier.");
+            return;
+        }
+
+        var cacheService = context.HttpContext.RequestServices.GetRequiredService<ICacheService>();
+        var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+
+        var cacheOptions = CacheEntryOptions.AbsoluteExpireIn(TimeSpan.FromMinutes(5));
+
+        var currentStampHash = await cacheService.GetOrSetAsync(
+            CacheKeys.SecurityStamp(userId),
+            async ct =>
+            {
+                var user = await userManager.FindByIdAsync(userId.ToString());
+                return user?.SecurityStamp is not null ? HashHelper.Sha256(user.SecurityStamp) : string.Empty;
+            },
+            cacheOptions);
+
+        if (string.IsNullOrEmpty(currentStampHash))
+        {
+            // User not found or has no stamp — reject
+            context.Fail("User not found.");
+            return;
+        }
+
+        if (!string.Equals(stampClaim, currentStampHash, StringComparison.Ordinal))
+        {
+            context.Fail("Security stamp has changed.");
         }
     }
 }

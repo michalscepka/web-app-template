@@ -11,4 +11,12 @@ public static class CacheKeys
     /// <param name="userId">The user's unique identifier.</param>
     /// <returns>A cache key in the format <c>user:{userId}</c>.</returns>
     public static string User(Guid userId) => $"user:{userId}";
+
+    /// <summary>
+    /// Returns the cache key for a user's hashed security stamp.
+    /// Used to validate JWT tokens against the current security stamp without hitting the database on every request.
+    /// </summary>
+    /// <param name="userId">The user's unique identifier.</param>
+    /// <returns>A cache key in the format <c>security-stamp:{userId}</c>.</returns>
+    public static string SecurityStamp(Guid userId) => $"security-stamp:{userId}";
 }
