@@ -117,6 +117,7 @@ internal class AdminService(
             return Result.Failure(errors);
         }
 
+        await RevokeUserSessionsAsync(user, userId, cancellationToken);
         await InvalidateUserCacheAsync(userId);
         logger.LogInformation("Role '{Role}' assigned to user '{UserId}' by admin '{CallerUserId}'",
             input.Role, userId, callerUserId);
