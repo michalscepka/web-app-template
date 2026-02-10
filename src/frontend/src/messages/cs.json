@@ -263,6 +263,8 @@
 	"admin_userDetail_deleteCancel": "Zrušit",
 	"admin_userDetail_deleteSuccess": "Uživatelský účet byl smazán",
 	"admin_userDetail_deleteError": "Nepodařilo se smazat uživatelský účet",
+	"admin_userDetail_selectRole": "Vyberte roli...",
+	"admin_userDetail_dangerZone": "Nebezpečná zóna",
 	"admin_userDetail_cannotManage": "Nemáte dostatečná oprávnění ke správě tohoto uživatele.",
 
 	"admin_roles_title": "Role",
