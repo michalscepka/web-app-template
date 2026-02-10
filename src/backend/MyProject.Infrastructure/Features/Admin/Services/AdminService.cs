@@ -425,6 +425,7 @@ internal class AdminService(
         }
 
         await userManager.UpdateSecurityStampAsync(user);
+        await cacheService.RemoveAsync(CacheKeys.SecurityStamp(userId), cancellationToken);
     }
 
     private async Task<IList<string>> GetUserRolesAsync(Guid userId)

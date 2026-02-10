@@ -217,6 +217,7 @@ internal class UserService(
 
         await dbContext.SaveChangesAsync(cancellationToken);
         await userManager.UpdateSecurityStampAsync(user);
+        await cacheService.RemoveAsync(CacheKeys.SecurityStamp(userId), cancellationToken);
     }
 
     private void ClearAuthCookies()

@@ -10,6 +10,8 @@ using MyProject.Application.Cookies.Constants;
 using MyProject.Application.Features.Authentication;
 using MyProject.Application.Features.Authentication.Dtos;
 using MyProject.Application.Cookies;
+using MyProject.Application.Caching;
+using MyProject.Application.Caching.Constants;
 using MyProject.Application.Identity;
 using MyProject.Application.Identity.Constants;
 
@@ -25,6 +27,7 @@ internal class AuthenticationService(
     TimeProvider timeProvider,
     ICookieService cookieService,
     IUserContext userContext,
+    ICacheService cacheService,
     IOptions<AuthenticationOptions> authenticationOptions,
     MyProjectDbContext dbContext) : IAuthenticationService
 {
@@ -292,6 +295,7 @@ internal class AuthenticationService(
         if (user != null)
         {
             await userManager.UpdateSecurityStampAsync(user);
+            await cacheService.RemoveAsync(CacheKeys.SecurityStamp(userId), cancellationToken);
         }
     }
 
