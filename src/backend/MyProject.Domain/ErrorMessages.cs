@@ -46,12 +46,27 @@ public static class ErrorMessages
     /// </summary>
     public static class Admin
     {
+        public const string UserNotFound = "User not found.";
         public const string HierarchyInsufficient = "You do not have sufficient privileges to manage this user.";
         public const string RoleAssignAboveRank = "Cannot assign a role at or above your own rank.";
         public const string RoleRemoveAboveRank = "Cannot remove a role at or above your own rank.";
         public const string RoleSelfRemove = "Cannot remove a role from your own account.";
         public const string LockSelfAction = "Cannot lock your own account.";
         public const string DeleteSelfAction = "Cannot delete your own account.";
+    }
+
+    /// <summary>
+    /// Role management error messages.
+    /// </summary>
+    public static class Roles
+    {
+        public const string SystemRoleCannotBeDeleted = "System roles cannot be deleted.";
+        public const string SystemRoleCannotBeRenamed = "System roles cannot be renamed.";
+        public const string RoleNotFound = "Role not found.";
+        public const string RoleNameTaken = "A role with this name already exists.";
+        public const string RoleHasUsers = "Cannot delete a role that has users assigned to it.";
+        public const string InvalidPermission = "One or more permission values are invalid.";
+        public const string SuperAdminPermissionsFixed = "SuperAdmin permissions cannot be modified.";
     }
 
     /// <summary>

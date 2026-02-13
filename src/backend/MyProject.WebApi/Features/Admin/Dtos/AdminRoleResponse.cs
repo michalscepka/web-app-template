@@ -18,6 +18,16 @@ public class AdminRoleResponse
     public string Name { [UsedImplicitly] get; [UsedImplicitly] init; } = string.Empty;
 
     /// <summary>
+    /// An optional description of the role's purpose.
+    /// </summary>
+    public string? Description { [UsedImplicitly] get; [UsedImplicitly] init; }
+
+    /// <summary>
+    /// Whether this is a system-defined role that cannot be deleted or renamed.
+    /// </summary>
+    public bool IsSystem { [UsedImplicitly] get; [UsedImplicitly] init; }
+
+    /// <summary>
     /// The number of users assigned to this role.
     /// </summary>
     public int UserCount { [UsedImplicitly] get; [UsedImplicitly] init; }

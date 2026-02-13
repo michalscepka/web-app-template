@@ -161,6 +161,41 @@ dotnet ef database update \
 
 1. Add `public const string` field to `src/backend/MyProject.Application/Identity/Constants/AppRoles.cs`
 2. That's it — `AppRoles.All` discovers roles via reflection, seeding picks them up automatically
+3. *(Optional)* To seed default permissions for the new role, add entries to `SeedRolePermissionsAsync()` in `src/backend/MyProject.Infrastructure/Persistence/Extensions/ApplicationBuilderExtensions.cs`
+
+### Add a Permission
+
+**Backend:**
+
+1. Add `public const string` field to the appropriate nested class in `src/backend/MyProject.Application/Identity/Constants/AppPermissions.cs`:
+   ```csharp
+   public static class Orders
+   {
+       public const string View = "orders.view";
+       public const string Manage = "orders.manage";
+   }
+   ```
+   `AppPermissions.All` discovers permissions via reflection — no manual registration needed.
+2. Add `[RequirePermission(AppPermissions.Orders.View)]` to the relevant controller actions
+3. *(Optional)* Seed the permission for existing roles in `SeedRolePermissionsAsync()` in `src/backend/MyProject.Infrastructure/Persistence/Extensions/ApplicationBuilderExtensions.cs`
+4. Verify: `dotnet build src/backend/MyProject.slnx`
+
+**Frontend:**
+
+5. Add matching constants to `src/frontend/src/lib/utils/permissions.ts`:
+   ```typescript
+   Orders: {
+       View: 'orders.view',
+       Manage: 'orders.manage',
+   },
+   ```
+6. Use in components: `hasPermission(user, Permissions.Orders.View)`
+7. If adding a new admin page: add a per-page guard in `+page.server.ts`:
+   ```typescript
+   if (!hasPermission(user, Permissions.Orders.View)) throw redirect(303, '/');
+   ```
+8. If adding a sidebar nav item: add `permission: Permissions.Orders.View` to the nav item in `SidebarNav.svelte` — items are filtered per-permission, not as a group
+9. Verify: `cd src/frontend && npm run format && npm run lint && npm run check`
 
 ---
 
@@ -234,13 +269,13 @@ This updates `src/frontend/src/lib/api/v1.d.ts`. After regenerating:
 ### Add a shadcn Component
 
 ```bash
-cd src/frontend && npx shadcn-svelte@next add {component-name}
+cd src/frontend && npx shadcn-svelte@latest add {component-name}
 ```
 
 Generates in `src/frontend/src/lib/components/ui/{component}/`. After adding:
 
 1. Convert any physical CSS to logical (`ml-*` → `ms-*`, etc.)
-2. Available: alert, avatar, badge, button, card, dialog, dropdown-menu, input, label, phone-input, select, separator, sheet, sonner, textarea, tooltip
+2. Available: alert, avatar, badge, button, card, checkbox, dialog, dropdown-menu, input, label, phone-input, select, separator, sheet, sonner, textarea, tooltip
 3. Browse full catalog: [ui.shadcn.com](https://ui.shadcn.com)
 
 ### Add an npm Package

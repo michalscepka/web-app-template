@@ -60,7 +60,8 @@ src/
 │   └── utils/
 │       ├── ui.ts                  # cn() for class merging
 │       ├── platform.ts            # IS_MAC, IS_WINDOWS detection
-│       └── index.ts               # Barrel export (cn, WithoutChildrenOrChild)
+│       ├── permissions.ts         # Permission constants + hasPermission(), hasAnyPermission()
+│       └── index.ts               # Barrel export (cn, WithoutChildrenOrChild, permissions)
 │
 ├── routes/
 │   ├── (app)/                     # Authenticated (redirect to /login if no user)
@@ -70,7 +71,13 @@ src/
 │   │   ├── analytics/             # Analytics page (WIP placeholder)
 │   │   ├── profile/               # User profile page
 │   │   ├── reports/               # Reports page (WIP placeholder)
-│   │   └── settings/              # Settings page (WIP placeholder)
+│   │   ├── settings/              # Settings page (WIP placeholder)
+│   │   └── admin/                 # Admin section (permission-guarded)
+│   │       ├── +layout.server.ts  # Permission guard (users.view or roles.view)
+│   │       ├── users/             # User management
+│   │       │   └── [id]/          # User detail
+│   │       └── roles/             # Role management
+│   │           └── [id]/          # Role detail + permission editor
 │   │
 │   ├── (public)/                  # Unauthenticated
 │   │   └── login/
@@ -410,7 +417,7 @@ Svelte 5 provides reactive collection classes in `svelte/reactivity`. Use these 
 import { SvelteSet } from 'svelte/reactivity';
 import { SvelteURLSearchParams } from 'svelte/reactivity';
 
-const activeFields = new SvelteSet<string>();   // Reactive Set — auto-tracks adds/deletes
+const activeFields = new SvelteSet<string>(); // Reactive Set — auto-tracks adds/deletes
 const params = new SvelteURLSearchParams(url.searchParams); // Reactive query string manipulation
 ```
 
@@ -455,7 +462,8 @@ Components live in feature folders under `$lib/components/`:
 ```
 components/
 ├── admin/           # UserTable, Pagination, RoleTable, UserDetailCards,
-│   └── index.ts     # UserManagementCard, AccountInfoCard
+│   └── index.ts     # UserManagementCard, AccountInfoCard, CreateRoleDialog,
+│                    # RolePermissionEditor
 ├── auth/            # LoginForm, LoginBackground, RegisterDialog
 │   └── index.ts     # Barrel export
 ├── getting-started/ # GettingStarted, markdown.ts (removable starter page)
@@ -499,7 +507,7 @@ import { SERVER_CONFIG } from '$lib/config/server';
 ### Adding shadcn Components
 
 ```bash
-npx shadcn-svelte@next add <component-name>
+npx shadcn-svelte@latest add <component-name>
 ```
 
 This generates components in `$lib/components/ui/<component>/`. The configuration lives in `components.json` at the frontend root:
@@ -527,7 +535,7 @@ This generates components in `$lib/components/ui/<component>/`. The configuratio
 - Generated components are **customizable** (this is a template, not a library). Modifying them is acceptable and expected.
 - When touching any shadcn component, convert physical CSS properties to logical (see Styling section).
 - When adding i18n to shadcn components (e.g., localizing "Close" sr-only text), import `$lib/paraglide/messages` and use message functions.
-- Available components: alert, avatar, badge, button, card, dialog, dropdown-menu, input, label, phone-input (custom), sheet, sonner, textarea, tooltip.
+- Available components: alert, avatar, badge, button, card, checkbox, dialog, dropdown-menu, input, label, phone-input (custom), select, separator, sheet, sonner, textarea, tooltip.
 - Browse the full catalog at [ui.shadcn.com](https://ui.shadcn.com) to find components before building custom ones.
 
 ## Reactive State
@@ -821,42 +829,68 @@ To add a route group with additional access requirements (e.g., admin-only pages
    └── (public)/        # Unauthenticated
    ```
 
-2. **Add a layout guard** that checks both authentication and roles:
+2. **Add a layout guard** that checks both authentication and permissions:
 
    ```typescript
    // routes/(admin)/+layout.server.ts
    import { redirect } from '@sveltejs/kit';
+   import { hasAnyPermission, Permissions } from '$lib/utils';
    import type { LayoutServerLoad } from './$types';
 
    export const load: LayoutServerLoad = async ({ parent }) => {
    	const { user } = await parent();
    	if (!user) throw redirect(303, '/login');
-   	if (!user.roles?.includes('Admin')) throw redirect(303, '/');
+   	if (!hasAnyPermission(user, [Permissions.Users.View])) throw redirect(303, '/');
    	return { user };
    };
    ```
 
-3. **Keep authorization on the backend too.** Frontend guards are UX — they prevent users from seeing pages they can't use. The backend `[Authorize(Roles = "Admin")]` is the actual security boundary. Never rely on frontend-only role checks.
+3. **Add per-page guards** for each page that checks its specific permission (see "Layout and Page Guards with Permissions" below).
 
-### Role-Based Access
+4. **Keep authorization on the backend too.** Frontend guards are UX — they prevent users from seeing pages they can't use. The backend `[RequirePermission]` is the actual security boundary. Never rely on frontend-only permission checks.
 
-**Current state:** The frontend has no role-based routing. Roles are only displayed as badges on the profile page (`AccountDetails.svelte`). The `UserResponse` from the backend includes `roles: string[]`.
+### Role & Permission-Based Access
 
-**Architecture:** Role-based access is enforced at two levels:
+Authorization is enforced at two levels:
 
-| Level                       | Mechanism                                             | Purpose                                                        |
-| --------------------------- | ----------------------------------------------------- | -------------------------------------------------------------- |
-| **Backend** (authoritative) | `[Authorize(Roles = "...")]` on controllers/endpoints | Security enforcement — rejects unauthorized API calls with 403 |
-| **Frontend** (UX)           | Layout guards + conditional rendering                 | Prevents users from seeing UI they can't use                   |
+| Level                       | Mechanism                                                           | Purpose                                                        |
+| --------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------- |
+| **Backend** (authoritative) | `[RequirePermission("users.view")]` on controllers/endpoints        | Security enforcement — rejects unauthorized API calls with 403 |
+| **Frontend** (UX)           | Layout guards + conditional rendering based on `user.permissions[]` | Prevents users from seeing UI they can't use                   |
 
-The backend is always the source of truth. If a user manipulates the frontend to bypass a role check, the API call will still fail with 403.
+The backend is always the source of truth. If a user manipulates the frontend to bypass a permission check, the API call will still fail with 403.
 
-#### Conditional Rendering by Role
+#### Permission Utilities
 
-To show/hide UI elements based on the current user's roles:
+Permission constants and helpers live in `$lib/utils/permissions.ts`:
+
+```typescript
+import { hasPermission, hasAnyPermission, Permissions } from '$lib/utils';
+
+// Check a single permission
+let canManage = $derived(hasPermission(data.user, Permissions.Users.Manage));
+
+// Check any of multiple permissions
+let isAdmin = $derived(
+	hasAnyPermission(data.user, [Permissions.Users.View, Permissions.Roles.View])
+);
+```
+
+The `Permissions` object mirrors the backend `AppPermissions` constants:
+
+| Constant                        | Value                  |
+| ------------------------------- | ---------------------- |
+| `Permissions.Users.View`        | `"users.view"`         |
+| `Permissions.Users.Manage`      | `"users.manage"`       |
+| `Permissions.Users.AssignRoles` | `"users.assign_roles"` |
+| `Permissions.Roles.View`        | `"roles.view"`         |
+| `Permissions.Roles.Manage`      | `"roles.manage"`       |
+
+#### Conditional Rendering by Permission
 
 ```svelte
 <script lang="ts">
+	import { hasPermission, Permissions } from '$lib/utils';
 	import type { User } from '$lib/types';
 
 	interface Props {
@@ -864,23 +898,49 @@ To show/hide UI elements based on the current user's roles:
 	}
 
 	let { user }: Props = $props();
+	let canManageRoles = $derived(hasPermission(user, Permissions.Roles.Manage));
 </script>
 
-{#if user.roles?.includes('Admin')}
-	<a href="/admin-panel">Admin Panel</a>
+{#if canManageRoles}
+	<Button onclick={openCreateRoleDialog}>Create Role</Button>
 {/if}
 ```
 
-#### Future: Granular Permissions
+#### Layout and Page Guards with Permissions
 
-The current model is role-based (`roles: string[]`). If granular permissions are added later (e.g., `permissions: string[]` on the user response), the same patterns apply:
+Authorization guards are layered:
 
-- Backend enforces permissions via policy-based authorization
-- Frontend checks `user.permissions?.includes('orders:write')` for conditional rendering
-- Layout guards check permissions for route-level access
-- The backend remains the single source of truth
+1. **Admin layout** — broad gate: allows access if user has *any* admin permission:
 
-Do **not** pre-build a permissions system. When the backend adds permissions to the user response, extend the frontend patterns above.
+   ```typescript
+   // routes/(app)/admin/+layout.server.ts
+   const hasAdminAccess = hasAnyPermission(user, [Permissions.Users.View, Permissions.Roles.View]);
+   if (!hasAdminAccess) throw redirect(303, '/');
+   ```
+
+2. **Individual pages** — specific gate: each page checks its own required permission:
+
+   ```typescript
+   // routes/(app)/admin/users/+page.server.ts
+   if (!hasPermission(user, Permissions.Users.View)) throw redirect(303, '/');
+   ```
+
+   This prevents users with only `roles.view` from hitting a 403 error on the users page — they get a clean redirect instead.
+
+3. **Sidebar navigation** — filters admin items per-permission (not a blanket show/hide):
+
+   ```typescript
+   // SidebarNav.svelte
+   let visibleAdminItems = $derived(
+       adminItems.filter((item) => hasPermission(user, item.permission))
+   );
+   ```
+
+   A user with only `roles.view` sees only the Roles link, not Users. The admin section separator only appears if at least one admin item is visible.
+
+#### Role Hierarchy (Still Active)
+
+Role hierarchy (`SuperAdmin > Admin > User`) is still used for **user management authorization** — preventing privilege escalation when assigning/removing roles or managing user accounts. This is separate from the permission system and lives in `$lib/utils/roles.ts`.
 
 ### Root Layout Data
 

@@ -1,22 +1,25 @@
-using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyProject.Application.Features.Admin;
+using MyProject.Application.Identity;
 using MyProject.Application.Identity.Constants;
+using MyProject.Domain;
+using MyProject.WebApi.Authorization;
 using MyProject.WebApi.Features.Admin.Dtos;
 using MyProject.WebApi.Features.Admin.Dtos.AssignRole;
+using MyProject.WebApi.Features.Admin.Dtos.CreateRole;
 using MyProject.WebApi.Features.Admin.Dtos.ListUsers;
+using MyProject.WebApi.Features.Admin.Dtos.SetPermissions;
+using MyProject.WebApi.Features.Admin.Dtos.UpdateRole;
 using MyProject.WebApi.Shared;
 
 namespace MyProject.WebApi.Features.Admin;
 
 /// <summary>
 /// Administrative endpoints for managing users and roles.
-/// Requires the Admin or SuperAdmin role. Role hierarchy and self-action protection
-/// are enforced at the service layer.
+/// Individual actions are protected by permission-based authorization via <see cref="RequirePermissionAttribute"/>.
+/// Role hierarchy and self-action protection are enforced at the service layer.
 /// </summary>
-[Authorize(Roles = $"{AppRoles.Admin},{AppRoles.SuperAdmin}")]
-public class AdminController(IAdminService adminService) : ApiController
+public class AdminController(IAdminService adminService, IRoleManagementService roleManagementService, IUserContext userContext) : ApiController
 {
     /// <summary>
     /// Gets a paginated list of all users, optionally filtered by a search term.
@@ -26,8 +29,9 @@ public class AdminController(IAdminService adminService) : ApiController
     /// <response code="200">Returns the paginated user list</response>
     /// <response code="400">If the pagination parameters are invalid</response>
     /// <response code="401">If the user is not authenticated</response>
-    /// <response code="403">If the user does not have the Admin or SuperAdmin role</response>
+    /// <response code="403">If the user does not have the required permission</response>
     [HttpGet("users")]
+    [RequirePermission(AppPermissions.Users.View)]
     [ProducesResponseType(typeof(ListUsersResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -49,18 +53,24 @@ public class AdminController(IAdminService adminService) : ApiController
     /// <returns>The user's admin-level details</returns>
     /// <response code="200">Returns the user details</response>
     /// <response code="401">If the user is not authenticated</response>
-    /// <response code="403">If the user does not have the Admin or SuperAdmin role</response>
+    /// <response code="403">If the user does not have the required permission</response>
     /// <response code="404">If the user was not found</response>
     [HttpGet("users/{id:guid}")]
+    [RequirePermission(AppPermissions.Users.View)]
     [ProducesResponseType(typeof(AdminUserResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AdminUserResponse>> GetUser(Guid id, CancellationToken cancellationToken)
     {
-        var output = await adminService.GetUserByIdAsync(id, cancellationToken);
+        var result = await adminService.GetUserByIdAsync(id, cancellationToken);
 
-        return Ok(output.ToResponse());
+        if (!result.IsSuccess)
+        {
+            return NotFound(new ErrorResponse { Message = result.Error });
+        }
+
+        return Ok(result.Value!.ToResponse());
     }
 
     /// <summary>
@@ -73,9 +83,10 @@ public class AdminController(IAdminService adminService) : ApiController
     /// <response code="204">Role assigned successfully</response>
     /// <response code="400">If the role is invalid, the user already has it, or hierarchy check fails</response>
     /// <response code="401">If the user is not authenticated</response>
-    /// <response code="403">If the user does not have the Admin or SuperAdmin role</response>
+    /// <response code="403">If the user does not have the required permission</response>
     /// <response code="404">If the user was not found</response>
     [HttpPost("users/{id:guid}/roles")]
+    [RequirePermission(AppPermissions.Users.AssignRoles)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -86,12 +97,12 @@ public class AdminController(IAdminService adminService) : ApiController
         [FromBody] AssignRoleRequest request,
         CancellationToken cancellationToken)
     {
-        var callerUserId = GetCurrentUserId();
+        var callerUserId = userContext.AuthenticatedUserId;
         var result = await adminService.AssignRoleAsync(callerUserId, id, request.ToInput(), cancellationToken);
 
         if (!result.IsSuccess)
         {
-            return BadRequest(new ErrorResponse { Message = result.Error });
+            return ToErrorResult(result.Error);
         }
 
         return NoContent();
@@ -107,9 +118,10 @@ public class AdminController(IAdminService adminService) : ApiController
     /// <response code="204">Role removed successfully</response>
     /// <response code="400">If the role is invalid, the user doesn't have it, or hierarchy check fails</response>
     /// <response code="401">If the user is not authenticated</response>
-    /// <response code="403">If the user does not have the Admin or SuperAdmin role</response>
+    /// <response code="403">If the user does not have the required permission</response>
     /// <response code="404">If the user was not found</response>
     [HttpDelete("users/{id:guid}/roles/{role}")]
+    [RequirePermission(AppPermissions.Users.AssignRoles)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -117,12 +129,12 @@ public class AdminController(IAdminService adminService) : ApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> RemoveRole(Guid id, string role, CancellationToken cancellationToken)
     {
-        var callerUserId = GetCurrentUserId();
+        var callerUserId = userContext.AuthenticatedUserId;
         var result = await adminService.RemoveRoleAsync(callerUserId, id, role, cancellationToken);
 
         if (!result.IsSuccess)
         {
-            return BadRequest(new ErrorResponse { Message = result.Error });
+            return ToErrorResult(result.Error);
         }
 
         return NoContent();
@@ -137,9 +149,10 @@ public class AdminController(IAdminService adminService) : ApiController
     /// <response code="204">User locked successfully</response>
     /// <response code="400">If the lock operation failed or hierarchy check fails</response>
     /// <response code="401">If the user is not authenticated</response>
-    /// <response code="403">If the user does not have the Admin or SuperAdmin role</response>
+    /// <response code="403">If the user does not have the required permission</response>
     /// <response code="404">If the user was not found</response>
     [HttpPost("users/{id:guid}/lock")]
+    [RequirePermission(AppPermissions.Users.Manage)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -147,12 +160,12 @@ public class AdminController(IAdminService adminService) : ApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> LockUser(Guid id, CancellationToken cancellationToken)
     {
-        var callerUserId = GetCurrentUserId();
+        var callerUserId = userContext.AuthenticatedUserId;
         var result = await adminService.LockUserAsync(callerUserId, id, cancellationToken);
 
         if (!result.IsSuccess)
         {
-            return BadRequest(new ErrorResponse { Message = result.Error });
+            return ToErrorResult(result.Error);
         }
 
         return NoContent();
@@ -166,9 +179,10 @@ public class AdminController(IAdminService adminService) : ApiController
     /// <response code="204">User unlocked successfully</response>
     /// <response code="400">If the unlock operation failed or hierarchy check fails</response>
     /// <response code="401">If the user is not authenticated</response>
-    /// <response code="403">If the user does not have the Admin or SuperAdmin role</response>
+    /// <response code="403">If the user does not have the required permission</response>
     /// <response code="404">If the user was not found</response>
     [HttpPost("users/{id:guid}/unlock")]
+    [RequirePermission(AppPermissions.Users.Manage)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -176,12 +190,12 @@ public class AdminController(IAdminService adminService) : ApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> UnlockUser(Guid id, CancellationToken cancellationToken)
     {
-        var callerUserId = GetCurrentUserId();
+        var callerUserId = userContext.AuthenticatedUserId;
         var result = await adminService.UnlockUserAsync(callerUserId, id, cancellationToken);
 
         if (!result.IsSuccess)
         {
-            return BadRequest(new ErrorResponse { Message = result.Error });
+            return ToErrorResult(result.Error);
         }
 
         return NoContent();
@@ -196,9 +210,10 @@ public class AdminController(IAdminService adminService) : ApiController
     /// <response code="204">User deleted successfully</response>
     /// <response code="400">If the delete operation failed or hierarchy check fails</response>
     /// <response code="401">If the user is not authenticated</response>
-    /// <response code="403">If the user does not have the Admin or SuperAdmin role</response>
+    /// <response code="403">If the user does not have the required permission</response>
     /// <response code="404">If the user was not found</response>
     [HttpDelete("users/{id:guid}")]
+    [RequirePermission(AppPermissions.Users.Manage)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -206,12 +221,12 @@ public class AdminController(IAdminService adminService) : ApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> DeleteUser(Guid id, CancellationToken cancellationToken)
     {
-        var callerUserId = GetCurrentUserId();
+        var callerUserId = userContext.AuthenticatedUserId;
         var result = await adminService.DeleteUserAsync(callerUserId, id, cancellationToken);
 
         if (!result.IsSuccess)
         {
-            return BadRequest(new ErrorResponse { Message = result.Error });
+            return ToErrorResult(result.Error);
         }
 
         return NoContent();
@@ -223,8 +238,9 @@ public class AdminController(IAdminService adminService) : ApiController
     /// <returns>A list of roles with the number of users in each</returns>
     /// <response code="200">Returns the list of roles</response>
     /// <response code="401">If the user is not authenticated</response>
-    /// <response code="403">If the user does not have the Admin or SuperAdmin role</response>
+    /// <response code="403">If the user does not have the required permission</response>
     [HttpGet("roles")]
+    [RequirePermission(AppPermissions.Roles.View)]
     [ProducesResponseType(typeof(IReadOnlyList<AdminRoleResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -236,15 +252,187 @@ public class AdminController(IAdminService adminService) : ApiController
         return Ok(roles.Select(r => r.ToResponse()).ToList());
     }
 
-    private Guid GetCurrentUserId()
+    /// <summary>
+    /// Gets detailed information about a single role, including its permissions and user count.
+    /// </summary>
+    /// <param name="id">The role ID</param>
+    /// <returns>The role details with permissions</returns>
+    /// <response code="200">Returns the role details</response>
+    /// <response code="401">If the user is not authenticated</response>
+    /// <response code="403">If the user does not have the required permission</response>
+    /// <response code="404">If the role was not found</response>
+    [HttpGet("roles/{id:guid}")]
+    [RequirePermission(AppPermissions.Roles.View)]
+    [ProducesResponseType(typeof(RoleDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<RoleDetailResponse>> GetRole(Guid id, CancellationToken cancellationToken)
     {
-        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var result = await roleManagementService.GetRoleDetailAsync(id, cancellationToken);
 
-        if (!Guid.TryParse(claim, out var userId))
+        if (!result.IsSuccess)
         {
-            throw new UnauthorizedAccessException("Unable to determine the current user identity.");
+            return ToErrorResult(result.Error);
         }
 
-        return userId;
+        return Ok(result.Value!.ToResponse());
     }
+
+    /// <summary>
+    /// Creates a new custom role.
+    /// </summary>
+    /// <param name="request">The role name and optional description</param>
+    /// <returns>The created role's ID</returns>
+    /// <response code="201">Role created successfully</response>
+    /// <response code="400">If the role name is taken or validation fails</response>
+    /// <response code="401">If the user is not authenticated</response>
+    /// <response code="403">If the user does not have the required permission</response>
+    [HttpPost("roles")]
+    [RequirePermission(AppPermissions.Roles.Manage)]
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult> CreateRole(
+        [FromBody] CreateRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await roleManagementService.CreateRoleAsync(request.ToInput(), cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return ToErrorResult(result.Error);
+        }
+
+        return CreatedAtAction(nameof(GetRole), new { id = result.Value }, null);
+    }
+
+    /// <summary>
+    /// Updates an existing role's name and/or description. System roles cannot be renamed.
+    /// </summary>
+    /// <param name="id">The role ID</param>
+    /// <param name="request">The fields to update</param>
+    /// <returns>No content on success</returns>
+    /// <response code="204">Role updated successfully</response>
+    /// <response code="400">If the update is invalid (system role rename, name taken, etc.)</response>
+    /// <response code="401">If the user is not authenticated</response>
+    /// <response code="403">If the user does not have the required permission</response>
+    /// <response code="404">If the role was not found</response>
+    [HttpPut("roles/{id:guid}")]
+    [RequirePermission(AppPermissions.Roles.Manage)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> UpdateRole(
+        Guid id,
+        [FromBody] UpdateRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await roleManagementService.UpdateRoleAsync(id, request.ToInput(), cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return ToErrorResult(result.Error);
+        }
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Deletes a custom role. System roles and roles with assigned users cannot be deleted.
+    /// </summary>
+    /// <param name="id">The role ID</param>
+    /// <returns>No content on success</returns>
+    /// <response code="204">Role deleted successfully</response>
+    /// <response code="400">If the role is a system role or has users assigned</response>
+    /// <response code="401">If the user is not authenticated</response>
+    /// <response code="403">If the user does not have the required permission</response>
+    /// <response code="404">If the role was not found</response>
+    [HttpDelete("roles/{id:guid}")]
+    [RequirePermission(AppPermissions.Roles.Manage)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> DeleteRole(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await roleManagementService.DeleteRoleAsync(id, cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return ToErrorResult(result.Error);
+        }
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Replaces all permissions on a role. Rotates security stamps for affected users.
+    /// SuperAdmin permissions cannot be modified.
+    /// </summary>
+    /// <param name="id">The role ID</param>
+    /// <param name="request">The new set of permissions</param>
+    /// <returns>No content on success</returns>
+    /// <response code="204">Permissions updated successfully</response>
+    /// <response code="400">If the permissions are invalid or SuperAdmin is targeted</response>
+    /// <response code="401">If the user is not authenticated</response>
+    /// <response code="403">If the user does not have the required permission</response>
+    /// <response code="404">If the role was not found</response>
+    [HttpPut("roles/{id:guid}/permissions")]
+    [RequirePermission(AppPermissions.Roles.Manage)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> SetRolePermissions(
+        Guid id,
+        [FromBody] SetPermissionsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await roleManagementService.SetRolePermissionsAsync(id, request.ToInput(), cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return ToErrorResult(result.Error);
+        }
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Returns all available permissions grouped by category.
+    /// </summary>
+    /// <returns>Permission groups</returns>
+    /// <response code="200">Returns the permission groups</response>
+    /// <response code="401">If the user is not authenticated</response>
+    /// <response code="403">If the user does not have the required permission</response>
+    [HttpGet("permissions")]
+    [RequirePermission(AppPermissions.Roles.View)]
+    [ProducesResponseType(typeof(IReadOnlyList<PermissionGroupResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public ActionResult<IReadOnlyList<PermissionGroupResponse>> GetAllPermissions()
+    {
+        var permissions = roleManagementService.GetAllPermissions();
+        return Ok(permissions.Select(p => p.ToResponse()).ToList());
+    }
+
+    /// <summary>
+    /// Returns <see cref="NotFoundObjectResult"/> for not-found errors, <see cref="BadRequestObjectResult"/> otherwise.
+    /// </summary>
+    private ActionResult ToErrorResult(string? error)
+    {
+        if (error is ErrorMessages.Admin.UserNotFound or ErrorMessages.Roles.RoleNotFound)
+        {
+            return NotFound(new ErrorResponse { Message = error });
+        }
+
+        return BadRequest(new ErrorResponse { Message = error });
+    }
+
 }
