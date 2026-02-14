@@ -35,8 +35,8 @@ Run the init script, pick a name, and start building your product. Everything el
 | Feature | Implementation |
 |---|---|
 | **Clean Architecture** | Domain → Application → Infrastructure → WebApi, with enforced dependency rules |
-| **Authentication** | JWT in HttpOnly cookies with refresh token rotation and security stamp validation |
-| **Authorization** | Role-based with hierarchical role system (SuperAdmin > Admin > User) |
+| **Authentication** | JWT in HttpOnly cookies, refresh token rotation, security stamp validation, remember-me persistent sessions |
+| **Authorization** | Permission-based with custom roles — atomic permissions (`users.view`, `roles.manage`, …) assigned per role, enforced via `[RequirePermission]` |
 | **Rate Limiting** | Global + per-endpoint policies, configurable fixed-window with IP partitioning |
 | **Validation** | FluentValidation + Data Annotations, flowing constraints into OpenAPI spec |
 | **Caching** | Redis (distributed) + in-memory fallback, cache-aside pattern with auto-invalidation |
@@ -44,8 +44,9 @@ Run the init script, pick a name, and start building your product. Everything el
 | **API Documentation** | OpenAPI spec + Scalar UI, with enum handling and schema transformers |
 | **Error Handling** | Result pattern for business logic, middleware for exceptions, structured `ErrorResponse` everywhere |
 | **Logging** | Serilog → Seq with structured request logging |
-| **Account Management** | Registration, login, logout, password change, profile updates, account deletion |
-| **Admin Panel** | User management, role assignment/removal, admin-only endpoints |
+| **Account Management** | Registration, login/logout, remember me, password change, profile updates, account deletion |
+| **Admin Panel** | User management, custom role CRUD with permission editor, role assignment, hierarchy enforcement |
+| **Soft Refresh** | Role/permission changes rotate security stamps but preserve refresh tokens — users silently re-authenticate without logout |
 
 ### Frontend — SvelteKit / Svelte 5
 
@@ -57,7 +58,9 @@ Run the init script, pick a name, and start building your product. Everything el
 | **BFF Architecture** | Server-side API proxy handles cookies, CSRF, and auth transparently |
 | **i18n** | Paraglide JS — type-safe keys, compile-time optimization, SSR-compatible |
 | **Security Headers** | CSP-ready, X-Frame-Options, Referrer-Policy, Permissions-Policy on every response |
+| **Permission Guards** | Frontend route and component guards driven by JWT permission claims — pages, nav items, and actions gated per permission |
 | **Responsive Layout** | Sidebar navigation with mobile drawer, breakpoint-aware page layouts |
+| **Admin UI** | User list with search, role list with create/edit/delete, permission checkbox editor grouped by category |
 
 ### Infrastructure
 
@@ -96,8 +99,12 @@ Backend API (.NET :8080)
 NETrock is built **security-first**. Every decision defaults to the most restrictive option, then selectively opens what's needed.
 
 - **JWT in HttpOnly cookies** — tokens never touch JavaScript, immune to XSS theft
-- **Refresh token rotation** — single-use tokens with automatic family revocation
-- **Security stamp validation** — role changes propagate to active sessions via SHA-256 hashed stamps in JWT claims, cached in Redis
+- **Refresh token rotation** — single-use tokens with automatic family revocation on reuse detection
+- **Security stamp validation** — permission changes propagate to active sessions via SHA-256 hashed stamps in JWT claims, cached in Redis
+- **Soft refresh** — role/permission changes invalidate access tokens but preserve refresh tokens, so users silently re-authenticate instead of getting kicked out
+- **Permission-based authorization** — atomic permissions enforced on every admin endpoint via `[RequirePermission]`, with frontend guards on routes and UI components
+- **Role hierarchy protection** — users cannot escalate privileges; only SuperAdmin can assign Admin roles, system roles cannot be deleted
+- **CORS production safeguard** — startup guard rejects `AllowAllOrigins` in non-development environments, preventing credential-leaking misconfiguration from reaching production
 - **Rate limiting** — global + per-endpoint (registration has its own stricter policy), configurable per environment
 - **CSRF protection** — Origin header validation in the SvelteKit API proxy
 - **Input validation everywhere** — FluentValidation on the backend, even if the frontend already validates
@@ -192,6 +199,7 @@ src/
         │   └── config/              # App configuration
         └── routes/
             ├── (app)/                # Authenticated pages
+            │   └── admin/            # Admin panel (users, roles, permissions)
             ├── (public)/             # Public pages (login)
             └── api/                  # API proxy to backend
 ```
