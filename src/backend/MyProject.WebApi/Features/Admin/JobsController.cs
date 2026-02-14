@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using MyProject.Application.Features.Jobs;
 using MyProject.Application.Identity.Constants;
 using MyProject.Domain;
@@ -43,7 +44,7 @@ public class JobsController(IJobManagementService jobManagementService) : ApiCon
     /// <response code="401">If the user is not authenticated</response>
     /// <response code="403">If the user does not have the required permission</response>
     /// <response code="404">If the job was not found</response>
-    [HttpGet("jobs/{jobId}")]
+    [HttpGet("jobs/{jobId:jobId}")]
     [RequirePermission(AppPermissions.Jobs.View)]
     [ProducesResponseType(typeof(RecurringJobDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -72,10 +73,12 @@ public class JobsController(IJobManagementService jobManagementService) : ApiCon
     /// <response code="403">If the user does not have the required permission</response>
     [HttpPost("jobs/restore")]
     [RequirePermission(AppPermissions.Jobs.Manage)]
+    [EnableRateLimiting(RateLimitPolicies.AdminMutations)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> RestoreJobs()
     {
         var result = await jobManagementService.RestoreJobsAsync();
@@ -98,13 +101,15 @@ public class JobsController(IJobManagementService jobManagementService) : ApiCon
     /// <response code="401">If the user is not authenticated</response>
     /// <response code="403">If the user does not have the required permission</response>
     /// <response code="404">If the job was not found</response>
-    [HttpPost("jobs/{jobId}/trigger")]
+    [HttpPost("jobs/{jobId:jobId}/trigger")]
     [RequirePermission(AppPermissions.Jobs.Manage)]
+    [EnableRateLimiting(RateLimitPolicies.AdminMutations)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> TriggerJob(string jobId)
     {
         var result = await jobManagementService.TriggerJobAsync(jobId);
@@ -126,13 +131,15 @@ public class JobsController(IJobManagementService jobManagementService) : ApiCon
     /// <response code="401">If the user is not authenticated</response>
     /// <response code="403">If the user does not have the required permission</response>
     /// <response code="404">If the job was not found</response>
-    [HttpDelete("jobs/{jobId}")]
+    [HttpDelete("jobs/{jobId:jobId}")]
     [RequirePermission(AppPermissions.Jobs.Manage)]
+    [EnableRateLimiting(RateLimitPolicies.AdminMutations)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> RemoveJob(string jobId)
     {
         var result = await jobManagementService.RemoveJobAsync(jobId);
@@ -154,13 +161,15 @@ public class JobsController(IJobManagementService jobManagementService) : ApiCon
     /// <response code="401">If the user is not authenticated</response>
     /// <response code="403">If the user does not have the required permission</response>
     /// <response code="404">If the job was not found</response>
-    [HttpPost("jobs/{jobId}/pause")]
+    [HttpPost("jobs/{jobId:jobId}/pause")]
     [RequirePermission(AppPermissions.Jobs.Manage)]
+    [EnableRateLimiting(RateLimitPolicies.AdminMutations)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> PauseJob(string jobId)
     {
         var result = await jobManagementService.PauseJobAsync(jobId);
@@ -182,13 +191,15 @@ public class JobsController(IJobManagementService jobManagementService) : ApiCon
     /// <response code="401">If the user is not authenticated</response>
     /// <response code="403">If the user does not have the required permission</response>
     /// <response code="404">If the job was not found</response>
-    [HttpPost("jobs/{jobId}/resume")]
+    [HttpPost("jobs/{jobId:jobId}/resume")]
     [RequirePermission(AppPermissions.Jobs.Manage)]
+    [EnableRateLimiting(RateLimitPolicies.AdminMutations)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> ResumeJob(string jobId)
     {
         var result = await jobManagementService.ResumeJobAsync(jobId);

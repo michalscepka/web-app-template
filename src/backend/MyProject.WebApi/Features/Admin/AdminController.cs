@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using MyProject.Application.Features.Admin;
 using MyProject.Application.Identity;
 using MyProject.Application.Identity.Constants;
@@ -87,11 +88,13 @@ public class AdminController(IAdminService adminService, IRoleManagementService 
     /// <response code="404">If the user was not found</response>
     [HttpPost("users/{id:guid}/roles")]
     [RequirePermission(AppPermissions.Users.AssignRoles)]
+    [EnableRateLimiting(RateLimitPolicies.AdminMutations)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> AssignRole(
         Guid id,
         [FromBody] AssignRoleRequest request,
@@ -120,13 +123,15 @@ public class AdminController(IAdminService adminService, IRoleManagementService 
     /// <response code="401">If the user is not authenticated</response>
     /// <response code="403">If the user does not have the required permission</response>
     /// <response code="404">If the user was not found</response>
-    [HttpDelete("users/{id:guid}/roles/{role}")]
+    [HttpDelete("users/{id:guid}/roles/{role:roleName}")]
     [RequirePermission(AppPermissions.Users.AssignRoles)]
+    [EnableRateLimiting(RateLimitPolicies.AdminMutations)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> RemoveRole(Guid id, string role, CancellationToken cancellationToken)
     {
         var callerUserId = userContext.AuthenticatedUserId;
@@ -153,11 +158,13 @@ public class AdminController(IAdminService adminService, IRoleManagementService 
     /// <response code="404">If the user was not found</response>
     [HttpPost("users/{id:guid}/lock")]
     [RequirePermission(AppPermissions.Users.Manage)]
+    [EnableRateLimiting(RateLimitPolicies.AdminMutations)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> LockUser(Guid id, CancellationToken cancellationToken)
     {
         var callerUserId = userContext.AuthenticatedUserId;
@@ -183,11 +190,13 @@ public class AdminController(IAdminService adminService, IRoleManagementService 
     /// <response code="404">If the user was not found</response>
     [HttpPost("users/{id:guid}/unlock")]
     [RequirePermission(AppPermissions.Users.Manage)]
+    [EnableRateLimiting(RateLimitPolicies.AdminMutations)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> UnlockUser(Guid id, CancellationToken cancellationToken)
     {
         var callerUserId = userContext.AuthenticatedUserId;
@@ -214,11 +223,13 @@ public class AdminController(IAdminService adminService, IRoleManagementService 
     /// <response code="404">If the user was not found</response>
     [HttpDelete("users/{id:guid}")]
     [RequirePermission(AppPermissions.Users.Manage)]
+    [EnableRateLimiting(RateLimitPolicies.AdminMutations)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> DeleteUser(Guid id, CancellationToken cancellationToken)
     {
         var callerUserId = userContext.AuthenticatedUserId;
@@ -290,10 +301,12 @@ public class AdminController(IAdminService adminService, IRoleManagementService 
     /// <response code="403">If the user does not have the required permission</response>
     [HttpPost("roles")]
     [RequirePermission(AppPermissions.Roles.Manage)]
+    [EnableRateLimiting(RateLimitPolicies.AdminMutations)]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> CreateRole(
         [FromBody] CreateRoleRequest request,
         CancellationToken cancellationToken)
@@ -321,11 +334,13 @@ public class AdminController(IAdminService adminService, IRoleManagementService 
     /// <response code="404">If the role was not found</response>
     [HttpPut("roles/{id:guid}")]
     [RequirePermission(AppPermissions.Roles.Manage)]
+    [EnableRateLimiting(RateLimitPolicies.AdminMutations)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> UpdateRole(
         Guid id,
         [FromBody] UpdateRoleRequest request,
@@ -353,11 +368,13 @@ public class AdminController(IAdminService adminService, IRoleManagementService 
     /// <response code="404">If the role was not found</response>
     [HttpDelete("roles/{id:guid}")]
     [RequirePermission(AppPermissions.Roles.Manage)]
+    [EnableRateLimiting(RateLimitPolicies.AdminMutations)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> DeleteRole(Guid id, CancellationToken cancellationToken)
     {
         var result = await roleManagementService.DeleteRoleAsync(id, cancellationToken);
@@ -384,11 +401,13 @@ public class AdminController(IAdminService adminService, IRoleManagementService 
     /// <response code="404">If the role was not found</response>
     [HttpPut("roles/{id:guid}/permissions")]
     [RequirePermission(AppPermissions.Roles.Manage)]
+    [EnableRateLimiting(RateLimitPolicies.AdminMutations)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> SetRolePermissions(
         Guid id,
         [FromBody] SetPermissionsRequest request,

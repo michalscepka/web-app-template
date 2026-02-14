@@ -7,7 +7,6 @@ using MyProject.Domain;
 using MyProject.WebApi.Features.Authentication.Dtos.ChangePassword;
 using MyProject.WebApi.Features.Authentication.Dtos.Login;
 using MyProject.WebApi.Features.Authentication.Dtos.Register;
-using MyProject.WebApi.Options;
 using MyProject.WebApi.Shared;
 
 namespace MyProject.WebApi.Features.Authentication;
@@ -31,9 +30,11 @@ public class AuthController(IAuthenticationService authenticationService) : Cont
     /// <response code="400">If the credentials are improperly formatted</response>
     /// <response code="401">If the credentials are invalid</response>
     [HttpPost("login")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     [ProducesResponseType(typeof(AuthenticationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<AuthenticationResponse>> Login(
         [FromBody] LoginRequest request,
         [FromQuery] bool useCookies = false,
@@ -60,8 +61,10 @@ public class AuthController(IAuthenticationService authenticationService) : Cont
     /// <response code="200">Returns new authentication tokens (optionally also set in HttpOnly cookies)</response>
     /// <response code="401">If the refresh token is invalid, expired, or missing</response>
     [HttpPost("refresh")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     [ProducesResponseType(typeof(AuthenticationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<AuthenticationResponse>> Refresh(
         [FromBody] RefreshRequest? request,
         [FromQuery] bool useCookies = false,
@@ -115,7 +118,7 @@ public class AuthController(IAuthenticationService authenticationService) : Cont
     /// <response code="400">If the registration data is invalid</response>
     /// <response code="429">If too many registration requests have been made</response>
     [HttpPost("register")]
-    [EnableRateLimiting(RateLimitingOptions.RegistrationLimitOptions.PolicyName)]
+    [EnableRateLimiting(RateLimitPolicies.Registration)]
     [ProducesResponseType(typeof(RegisterResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
@@ -143,9 +146,11 @@ public class AuthController(IAuthenticationService authenticationService) : Cont
     /// <response code="401">If the user is not authenticated</response>
     [Authorize]
     [HttpPost("change-password")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordRequest request, CancellationToken cancellationToken)
     {
         var result = await authenticationService.ChangePasswordAsync(request.ToChangePasswordInput(), cancellationToken);

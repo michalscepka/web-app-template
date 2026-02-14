@@ -13,6 +13,7 @@ using MyProject.WebApi.Authorization;
 using MyProject.WebApi.Extensions;
 using MyProject.WebApi.Features.OpenApi.Extensions;
 using MyProject.WebApi.Middlewares;
+using MyProject.WebApi.Routing;
 using Serilog;
 using LoggerConfigurationExtensions = MyProject.Infrastructure.Logging.Extensions.LoggerConfigurationExtensions;
 
@@ -70,8 +71,13 @@ try
     Log.Debug("Adding Cors Feature");
     builder.Services.AddCors(builder.Configuration, builder.Environment);
 
-    Log.Debug("Adding Routing => LowercaseUrls");
-    builder.Services.AddRouting(options => options.LowercaseUrls = true);
+    Log.Debug("Adding Routing => LowercaseUrls, Custom Constraints");
+    builder.Services.AddRouting(options =>
+    {
+        options.LowercaseUrls = true;
+        options.ConstraintMap.Add("roleName", typeof(RoleNameRouteConstraint));
+        options.ConstraintMap.Add("jobId", typeof(JobIdRouteConstraint));
+    });
 
     Log.Debug("Adding Controllers");
     builder.Services.AddControllers()
@@ -145,11 +151,11 @@ try
     Log.Debug("Setting UseRouting");
     app.UseRouting();
 
-    Log.Debug("Setting UseRateLimiter");
-    app.UseRateLimiter();
-
     Log.Debug("Setting UseAuthentication");
     app.UseAuthentication();
+
+    Log.Debug("Setting UseRateLimiter");
+    app.UseRateLimiter();
 
     Log.Debug("Setting UseAuthorization");
     app.UseAuthorization();

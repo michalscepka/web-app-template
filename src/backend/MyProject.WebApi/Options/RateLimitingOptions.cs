@@ -30,10 +30,37 @@ public sealed class RateLimitingOptions
     public RegistrationLimitOptions Registration { get; init; } = new();
 
     /// <summary>
+    /// Gets or sets the authentication rate limiter configuration.
+    /// Applies a stricter fixed-window limit to login and token refresh endpoints to prevent brute-force attacks,
+    /// partitioned by IP address.
+    /// </summary>
+    [Required]
+    [ValidateObjectMembers]
+    public AuthLimitOptions Auth { get; init; } = new();
+
+    /// <summary>
+    /// Gets or sets the sensitive operations rate limiter configuration.
+    /// Applies a stricter fixed-window limit to password changes and account deletions,
+    /// partitioned by authenticated user.
+    /// </summary>
+    [Required]
+    [ValidateObjectMembers]
+    public SensitiveLimitOptions Sensitive { get; init; } = new();
+
+    /// <summary>
+    /// Gets or sets the admin mutations rate limiter configuration.
+    /// Applies a stricter fixed-window limit to state-changing admin and job management operations,
+    /// partitioned by authenticated user.
+    /// </summary>
+    [Required]
+    [ValidateObjectMembers]
+    public AdminMutationsLimitOptions AdminMutations { get; init; } = new();
+
+    /// <summary>
     /// Base configuration for a fixed-window rate limit policy.
     /// Provides shared properties for permit limit, time window, queue behavior, and processing order.
     /// </summary>
-    public abstract class FixedWindowPolicyOptions
+    public abstract class FixedWindowPolicyOptions : IValidatableObject
     {
         /// <summary>
         /// Gets or sets the maximum number of requests permitted within the time window.
@@ -45,6 +72,7 @@ public sealed class RateLimitingOptions
         /// <summary>
         /// Gets or sets the time window duration for the rate limiter.
         /// Requests exceeding <see cref="PermitLimit"/> within this window are rejected or queued.
+        /// Must be greater than zero.
         /// </summary>
         public TimeSpan Window { get; [UsedImplicitly] init; }
 
@@ -60,6 +88,15 @@ public sealed class RateLimitingOptions
         /// Defaults to <see cref="QueueProcessingOrder.OldestFirst"/>.
         /// </summary>
         public QueueProcessingOrder QueueProcessingOrder { get; [UsedImplicitly] init; } = QueueProcessingOrder.OldestFirst;
+
+        /// <inheritdoc />
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (Window <= TimeSpan.Zero)
+            {
+                yield return new ValidationResult("Window must be greater than zero.", [nameof(Window)]);
+            }
+        }
     }
 
     /// <summary>
@@ -82,21 +119,70 @@ public sealed class RateLimitingOptions
 
     /// <summary>
     /// Configuration options for the registration endpoint fixed-window rate limiter.
+    /// Defaults to 5 requests per 1 minute with no queuing.
     /// </summary>
     public sealed class RegistrationLimitOptions : FixedWindowPolicyOptions
     {
         /// <summary>
-        /// The policy name used to reference this limiter in <c>[EnableRateLimiting]</c> attributes.
-        /// </summary>
-        public const string PolicyName = "registration";
-
-        /// <summary>
         /// Initializes default values for the registration rate limiter.
-        /// Defaults to 5 requests per 1 minute with no queuing.
         /// </summary>
         public RegistrationLimitOptions()
         {
             PermitLimit = 5;
+            Window = TimeSpan.FromMinutes(1);
+            QueueLimit = 0;
+        }
+    }
+
+    /// <summary>
+    /// Configuration options for the authentication fixed-window rate limiter.
+    /// Applied to login and token refresh endpoints, partitioned by IP address.
+    /// Defaults to 10 requests per 1 minute with no queuing.
+    /// </summary>
+    public sealed class AuthLimitOptions : FixedWindowPolicyOptions
+    {
+        /// <summary>
+        /// Initializes default values for the authentication rate limiter.
+        /// </summary>
+        public AuthLimitOptions()
+        {
+            PermitLimit = 10;
+            Window = TimeSpan.FromMinutes(1);
+            QueueLimit = 0;
+        }
+    }
+
+    /// <summary>
+    /// Configuration options for the sensitive operations fixed-window rate limiter.
+    /// Applied to password changes and account deletions, partitioned by authenticated user.
+    /// Defaults to 5 requests per 5 minutes with no queuing.
+    /// </summary>
+    public sealed class SensitiveLimitOptions : FixedWindowPolicyOptions
+    {
+        /// <summary>
+        /// Initializes default values for the sensitive operations rate limiter.
+        /// </summary>
+        public SensitiveLimitOptions()
+        {
+            PermitLimit = 5;
+            Window = TimeSpan.FromMinutes(5);
+            QueueLimit = 0;
+        }
+    }
+
+    /// <summary>
+    /// Configuration options for the admin mutations fixed-window rate limiter.
+    /// Applied to state-changing admin and job management endpoints, partitioned by authenticated user.
+    /// Defaults to 30 requests per 1 minute with no queuing.
+    /// </summary>
+    public sealed class AdminMutationsLimitOptions : FixedWindowPolicyOptions
+    {
+        /// <summary>
+        /// Initializes default values for the admin mutations rate limiter.
+        /// </summary>
+        public AdminMutationsLimitOptions()
+        {
+            PermitLimit = 30;
             Window = TimeSpan.FromMinutes(1);
             QueueLimit = 0;
         }
