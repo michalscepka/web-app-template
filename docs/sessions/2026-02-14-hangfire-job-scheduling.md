@@ -63,6 +63,7 @@ Introduced Hangfire with PostgreSQL persistence as the standardized background j
 - **Choice**: Set cron to "0 0 31 2 *" (Feb 31, never fires) on pause, restore original on resume
 - **Alternatives considered**: Hangfire Pro pause API (paid), deleting and re-creating jobs
 - **Reasoning**: Hangfire free tier has no native pause/resume. The "never cron" approach keeps the job entry visible in the dashboard while preventing execution. Original cron is stored in a `ConcurrentDictionary` — simple and thread-safe for the single-server template use case.
+- **Restore interaction**: If a job is removed via the API, its pause record is cleaned up — restore brings it back running. If deleted directly from the Hangfire dashboard, the pause record survives — restore re-registers it still paused.
 
 ### Fire-and-Forget: No Custom Interface
 
@@ -149,5 +150,7 @@ flowchart TD
 - [ ] Verify Hangfire auto-creates `hangfire.*` schema in PostgreSQL on first startup
 - [ ] Assign `jobs.view` and `jobs.manage` permissions to Admin role via the permissions UI
 - [ ] Consider adding more recurring jobs as the application grows (e.g., email queue processing, cache warming, audit log archival)
-- [ ] If scaling to multiple servers, replace the in-memory `PausedJobCrons` dictionary with a persistent store (database or Hangfire job parameters)
-- [ ] Add a "restore jobs" admin endpoint (`POST /api/v1/admin/jobs/restore`) that re-registers all `IRecurringJobDefinition` implementations without requiring an app restart — needed when a job is deleted via the dashboard and needs to be re-introduced
+- [x] ~~If scaling to multiple servers, replace the in-memory `PausedJobCrons` dictionary with a persistent store (database or Hangfire job parameters)~~ — Pause state now persisted to `hangfire.pausedjobs` table; dictionary serves as read cache
+- [x] ~~Add a "restore jobs" admin endpoint (`POST /api/v1/admin/jobs/restore`) that re-registers all `IRecurringJobDefinition` implementations without requiring an app restart~~ — Implemented with permission gate + frontend button
+- [x] ~~Newtonsoft.Json NU1903 vulnerability warning~~ — Pinned Newtonsoft.Json 13.0.3 in `Directory.Packages.props` to override Hangfire's transitive 11.0.1 dependency. Hangfire is the only consumer; application code must use `System.Text.Json` exclusively
+- [x] ~~Review fixes~~ — Removed dead `NoOp()` method (pause now uses `ExecuteJobAsync` consistently), fixed `ResumeJobAsync` to delete from DB before removing from dictionary (crash-safe ordering), extracted `common_cancel`/`common_delete` i18n keys to replace cross-context reuse of `admin_userDetail_*` keys

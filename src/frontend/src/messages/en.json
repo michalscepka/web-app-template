@@ -32,6 +32,8 @@
 	"common_language": "Language",
 	"common_theme": "Theme",
 	"common_close": "Close",
+	"common_cancel": "Cancel",
+	"common_delete": "Delete",
 	"common_toggleNavMenu": "Toggle navigation menu",
 
 	"shortcuts_title": "Keyboard Shortcuts",
@@ -262,8 +264,6 @@
 	"admin_userDetail_unlockError": "Failed to unlock user account",
 	"admin_userDetail_deleteConfirmTitle": "Delete User Account",
 	"admin_userDetail_deleteConfirmDescription": "Are you sure you want to permanently delete this user account? This action cannot be undone.",
-	"admin_userDetail_deleteConfirm": "Delete",
-	"admin_userDetail_deleteCancel": "Cancel",
 	"admin_userDetail_deleteSuccess": "User account deleted",
 	"admin_userDetail_deleteError": "Failed to delete user account",
 	"admin_userDetail_selectRole": "Select a role...",
@@ -308,6 +308,10 @@
 
 	"admin_jobs_title": "Scheduled Jobs",
 	"admin_jobs_description": "Manage background jobs and view execution history.",
+	"admin_jobs_restore": "Restore Jobs",
+	"admin_jobs_restoreConfirm": "Re-register all job definitions? This restores any jobs that were deleted from the dashboard.",
+	"admin_jobs_restoreSuccess": "Jobs restored successfully.",
+	"admin_jobs_restoreError": "Failed to restore jobs.",
 	"admin_jobs_noJobs": "No scheduled jobs found.",
 	"admin_jobs_col_name": "Name",
 	"admin_jobs_col_schedule": "Schedule",

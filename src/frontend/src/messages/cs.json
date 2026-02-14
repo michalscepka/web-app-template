@@ -32,6 +32,8 @@
 	"common_language": "Jazyk",
 	"common_theme": "Motiv",
 	"common_close": "Zavřít",
+	"common_cancel": "Zrušit",
+	"common_delete": "Smazat",
 	"common_toggleNavMenu": "Přepnout navigační menu",
 
 	"shortcuts_title": "Klávesové zkratky",
@@ -262,8 +264,6 @@
 	"admin_userDetail_unlockError": "Nepodařilo se odemknout uživatelský účet",
 	"admin_userDetail_deleteConfirmTitle": "Smazat uživatelský účet",
 	"admin_userDetail_deleteConfirmDescription": "Opravdu chcete trvale smazat tento uživatelský účet? Tuto akci nelze vrátit zpět.",
-	"admin_userDetail_deleteConfirm": "Smazat",
-	"admin_userDetail_deleteCancel": "Zrušit",
 	"admin_userDetail_deleteSuccess": "Uživatelský účet byl smazán",
 	"admin_userDetail_deleteError": "Nepodařilo se smazat uživatelský účet",
 	"admin_userDetail_selectRole": "Vyberte roli...",
@@ -308,6 +308,10 @@
 
 	"admin_jobs_title": "Naplánované úlohy",
 	"admin_jobs_description": "Správa úloh na pozadí a zobrazení historie spuštění.",
+	"admin_jobs_restore": "Obnovit úlohy",
+	"admin_jobs_restoreConfirm": "Znovu zaregistrovat všechny definice úloh? Tím se obnoví úlohy smazané z dashboardu.",
+	"admin_jobs_restoreSuccess": "Úlohy byly úspěšně obnoveny.",
+	"admin_jobs_restoreError": "Nepodařilo se obnovit úlohy.",
 	"admin_jobs_noJobs": "Žádné naplánované úlohy nenalezeny.",
 	"admin_jobs_col_name": "Název",
 	"admin_jobs_col_schedule": "Plán",
