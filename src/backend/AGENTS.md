@@ -68,7 +68,7 @@ src/backend/
     │   └── PermissionRequirement.cs
     ├── Shared/                    # ApiController, ErrorResponse, PaginatedRequest/Response, ValidationConstants
     ├── Middlewares/                # ExceptionHandlingMiddleware
-    ├── Extensions/                # CORS, rate limiting
+    ├── Extensions/                # CORS, rate limiting, health checks
     └── Options/                   # CorsOptions, RateLimitingOptions
 ```
 

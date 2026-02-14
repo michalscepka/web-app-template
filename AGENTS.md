@@ -30,6 +30,7 @@ Backend API (.NET :8080)
     │
     ├── PostgreSQL (:5432)
     ├── Redis (:6379)
+    ├── Hangfire (PostgreSQL-backed)
     └── Seq (:80)
 ```
 
