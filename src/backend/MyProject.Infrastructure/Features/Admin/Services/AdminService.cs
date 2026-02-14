@@ -119,8 +119,7 @@ internal class AdminService(
             return Result.Failure(errors);
         }
 
-        await userManager.UpdateSecurityStampAsync(user);
-        await cacheService.RemoveAsync(CacheKeys.SecurityStamp(userId), cancellationToken);
+        await RotateSecurityStampAsync(user, userId, cancellationToken);
         await InvalidateUserCacheAsync(userId);
         logger.LogInformation("Role '{Role}' assigned to user '{UserId}' by admin '{CallerUserId}'",
             input.Role, userId, callerUserId);
@@ -183,7 +182,7 @@ internal class AdminService(
             return Result.Failure(errors);
         }
 
-        await RevokeUserSessionsAsync(user, userId, cancellationToken);
+        await RotateSecurityStampAsync(user, userId, cancellationToken);
         await InvalidateUserCacheAsync(userId);
         logger.LogInformation("Role '{Role}' removed from user '{UserId}' by admin '{CallerUserId}'",
             role, userId, callerUserId);
@@ -408,6 +407,18 @@ internal class AdminService(
         }
 
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Rotates a user's security stamp, invalidating their current access token.
+    /// Refresh tokens are preserved so the frontend can silently re-authenticate
+    /// and obtain a new JWT with updated claims.
+    /// </summary>
+    private async Task RotateSecurityStampAsync(ApplicationUser user, Guid userId,
+        CancellationToken cancellationToken)
+    {
+        await userManager.UpdateSecurityStampAsync(user);
+        await cacheService.RemoveAsync(CacheKeys.SecurityStamp(userId), cancellationToken);
     }
 
     /// <summary>
