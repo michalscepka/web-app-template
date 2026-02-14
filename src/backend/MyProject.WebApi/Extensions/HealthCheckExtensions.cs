@@ -27,7 +27,7 @@ internal static class HealthCheckExtensions
 
         healthChecks.AddNpgSql(
             connectionString,
-            name: "npgsql",
+            name: "PostgreSQL",
             timeout: TimeSpan.FromSeconds(3),
             tags: [ReadyTag]);
 
@@ -39,7 +39,7 @@ internal static class HealthCheckExtensions
 
             healthChecks.AddRedis(
                 redisConnectionString,
-                name: "redis",
+                name: "Redis",
                 timeout: TimeSpan.FromSeconds(3),
                 tags: [ReadyTag]);
         }
