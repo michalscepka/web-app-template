@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.HttpOverrides;
 using MyProject.Infrastructure.Features.Admin.Extensions;
 using MyProject.Infrastructure.Features.Jobs.Extensions;
@@ -61,6 +62,7 @@ try
         Log.Debug("Adding permission-based authorization");
         builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
         builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+        builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, ProblemDetailsAuthorizationHandler>();
     }
     catch (Exception ex)
     {
@@ -77,6 +79,15 @@ try
         options.LowercaseUrls = true;
         options.ConstraintMap.Add("roleName", typeof(RoleNameRouteConstraint));
         options.ConstraintMap.Add("jobId", typeof(JobIdRouteConstraint));
+    });
+
+    Log.Debug("Adding ProblemDetails");
+    builder.Services.AddProblemDetails(options =>
+    {
+        options.CustomizeProblemDetails = context =>
+        {
+            context.ProblemDetails.Instance = context.HttpContext.Request.Path;
+        };
     });
 
     Log.Debug("Adding Controllers");
@@ -141,6 +152,9 @@ try
 
     Log.Debug("Setting UseMiddleware => ExceptionHandlingMiddleware");
     app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+    Log.Debug("Setting UseStatusCodePages");
+    app.UseStatusCodePages();
 
     if (!app.Environment.IsDevelopment())
     {

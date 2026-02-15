@@ -1,25 +1,20 @@
 using System.Net;
-using System.Text.Json;
+using Microsoft.AspNetCore.Mvc;
 using MyProject.Domain;
 using MyProject.Infrastructure.Persistence.Exceptions;
-using MyProject.WebApi.Shared;
 
 namespace MyProject.WebApi.Middlewares;
 
 /// <summary>
-/// Catches unhandled exceptions and maps them to standardized <see cref="ErrorResponse"/> JSON responses.
+/// Catches unhandled exceptions and maps them to standardized <see cref="ProblemDetails"/> JSON responses.
 /// </summary>
 /// <remarks>Pattern documented in src/backend/AGENTS.md — update both when changing.</remarks>
 public class ExceptionHandlingMiddleware(
     RequestDelegate next,
     ILogger<ExceptionHandlingMiddleware> logger,
-    IHostEnvironment env)
+    IHostEnvironment env,
+    IProblemDetailsService problemDetailsService)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
     /// <summary>
     /// Invokes the next middleware and catches exceptions, mapping them to HTTP status codes:
     /// <see cref="KeyNotFoundException"/> to 404,
@@ -35,12 +30,16 @@ public class ExceptionHandlingMiddleware(
         catch (KeyNotFoundException keyNotFoundEx)
         {
             logger.LogWarning(keyNotFoundEx, "A KeyNotFoundException occurred.");
-            await HandleExceptionAsync(context, keyNotFoundEx, HttpStatusCode.NotFound);
+            await HandleExceptionAsync(context, keyNotFoundEx, HttpStatusCode.NotFound,
+                customMessage: ErrorMessages.Entity.NotFound);
         }
         catch (PaginationException paginationEx)
         {
             logger.LogWarning(paginationEx, "A PaginationException occurred.");
-            await HandleExceptionAsync(context, paginationEx, HttpStatusCode.BadRequest);
+            await HandleExceptionAsync(context, paginationEx, HttpStatusCode.BadRequest,
+                customMessage: paginationEx.ParamName is "pageSize"
+                    ? ErrorMessages.Pagination.InvalidPageSize
+                    : ErrorMessages.Pagination.InvalidPage);
         }
         catch (Exception e)
         {
@@ -56,17 +55,24 @@ public class ExceptionHandlingMiddleware(
         HttpStatusCode statusCode,
         string? customMessage = null)
     {
-        var errorResponse = new ErrorResponse
+        var status = (int)statusCode;
+        context.Response.StatusCode = status;
+
+        var problemDetails = new ProblemDetails
         {
-            Message = customMessage ?? exception.Message,
-            Details = env.IsDevelopment() ? exception.StackTrace : null
+            Status = status,
+            Detail = customMessage ?? exception.Message
         };
 
-        var payload = JsonSerializer.Serialize(errorResponse, JsonOptions);
+        if (env.IsDevelopment() && exception.StackTrace is not null)
+        {
+            problemDetails.Extensions["stackTrace"] = exception.StackTrace;
+        }
 
-        context.Response.ContentType = "application/json";
-        context.Response.StatusCode = (int)statusCode;
-
-        await context.Response.WriteAsync(payload);
+        await problemDetailsService.WriteAsync(new ProblemDetailsContext
+        {
+            HttpContext = context,
+            ProblemDetails = problemDetails
+        });
     }
 }

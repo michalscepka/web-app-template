@@ -66,7 +66,7 @@ src/backend/
     │   ├── PermissionPolicyProvider.cs
     │   ├── PermissionAuthorizationHandler.cs
     │   └── PermissionRequirement.cs
-    ├── Shared/                    # ApiController, ErrorResponse, PaginatedRequest/Response, ValidationConstants
+    ├── Shared/                    # ApiController, PaginatedRequest/Response, ValidationConstants
     ├── Middlewares/                # ExceptionHandlingMiddleware
     ├── Extensions/                # CORS, rate limiting, health checks
     └── Options/                   # CorsOptions, RateLimitingOptions
@@ -328,7 +328,7 @@ In controllers, map Result to HTTP responses:
 ```csharp
 var result = await service.CreateAsync(input, cancellationToken);
 if (!result.IsSuccess)
-    return BadRequest(new ErrorResponse { Message = result.Error });
+    return Problem(detail: result.Error, statusCode: StatusCodes.Status400BadRequest);
 return CreatedAtAction(nameof(Get), new { id = result.Value });
 ```
 
@@ -526,12 +526,12 @@ public class AuthController(IAuthenticationService authenticationService) : Cont
     /// <response code="401">If the credentials are invalid</response>
     [HttpPost("login")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
     {
         var result = await authenticationService.Login(request.Username, request.Password, cancellationToken);
         if (!result.IsSuccess)
-            return Unauthorized(new ErrorResponse { Message = result.Error });
+            return Problem(detail: result.Error, statusCode: StatusCodes.Status401Unauthorized);
         return Ok();
     }
 }
@@ -539,13 +539,14 @@ public class AuthController(IAuthenticationService authenticationService) : Cont
 
 Rules:
 - Always include `/// <summary>` XML docs — these generate OpenAPI descriptions consumed by the frontend
-- Always include `[ProducesResponseType]` for all possible status codes — with `typeof(ErrorResponse)` on error codes that return a body (400, 401, etc.)
-- **`[ProducesResponseType]` goes on the action, never on the controller or base class.** Each action explicitly declares its complete response contract so the OAS entry is self-contained and precise. Even when multiple actions share a status code (e.g., 401 on all authorized endpoints, 429 on all rate-limited endpoints), repeat the attribute per-action — class-level placement silently applies to actions that don't need it, creating noise in the spec and misleading generated types. Example: only add 429 to endpoints with `[EnableRateLimiting]`, not to the base class just because the global limiter exists.
+- Always include `[ProducesResponseType]` for all possible status codes — **without** `typeof(...)` on error codes (400, 401, 403, 404, 429). ASP.NET Core's default client error mapping automatically types these as `ProblemDetails` in the OAS. Only specify `typeof(T)` on success codes (200, 201).
+- **`[ProducesResponseType]` for status codes goes on the action.** Each action explicitly declares which status codes it can produce. Only add 429 to endpoints with `[EnableRateLimiting]`, 404 only on lookup endpoints, etc.
 - Always accept `CancellationToken` as the last parameter on async endpoints
 - **Never add `/// <param name="cancellationToken">`** — ASP.NET excludes `CancellationToken` from OAS parameters, but the `<param>` text leaks into `requestBody.description`. CS1573 is suppressed project-wide.
 - Only add `/// <param>` tags for parameters that should appear in the OAS (request body, route/query params)
-- **Never return anonymous objects or raw strings** from controllers — always use a defined DTO (`ErrorResponse` for errors, typed response DTOs for success). Anonymous objects produce untyped schemas in the OAS.
-- **Never use `StatusCode(int, object)`** for responses with a body — the `object` parameter loses type information and the OAS generator cannot introspect the response schema. Use typed helpers instead: `Ok(response)`, `Created(string.Empty, response)`, `BadRequest(error)`, etc.
+- **Never return anonymous objects or raw strings** from controllers — always use `Problem()` for errors and typed response DTOs for success. Anonymous objects produce untyped schemas in the OAS.
+- **Never use `NotFound()`, `BadRequest()`, `Unauthorized()`, or other shorthand helpers for error responses** — always use `Problem(detail: ..., statusCode: ...)`. The `Problem()` helper produces a standard `ProblemDetails` body with `Type`, `Title`, `Instance`, and `traceId` populated by the pipeline. The shorthand helpers bypass ProblemDetails and return unstructured or empty bodies.
+- **Never use `StatusCode(int, object)`** for responses with a body — the `object` parameter loses type information and the OAS generator cannot introspect the response schema. Use typed helpers for success only: `Ok(response)`, `Created(string.Empty, response)`.
 - **For 201 Created responses**, use `Created(string.Empty, response)` — not `CreatedAtAction` (which generates `Location` headers for MVC/Razor patterns this API doesn't use) and not `StatusCode(201, response)` (which loses type info).
 - **Never use `#pragma warning disable`** for XML doc warnings — fix the docs instead
 - Use primary constructors for dependency injection
@@ -605,12 +606,13 @@ Simple DTOs can also use data annotations (`[Required]`, `[MaxLength]`, `[EmailA
 
 ## Error Handling
 
-Three-tier strategy:
+Multi-tier strategy:
 
 1. **Expected business failures** → Return `Result.Failure(ErrorMessages.X.Y)` from services
 2. **Not found** → Throw `KeyNotFoundException` → `ExceptionHandlingMiddleware` returns 404
 3. **Pagination errors** → Throw `PaginationException` → middleware returns 400
-4. **Unexpected errors** → Let them propagate → middleware returns 500 with `ErrorResponse`
+4. **Unexpected errors** → Let them propagate → middleware returns 500 with `ProblemDetails`
+5. **Authentication/authorization failures** → `ProblemDetailsAuthorizationHandler` returns 401/403 with `ProblemDetails`
 
 ```csharp
 // ExceptionHandlingMiddleware catches and maps exceptions:
@@ -619,17 +621,45 @@ Three-tier strategy:
 // Everything else          → 500 (logged as Error, message: ErrorMessages.Server.InternalError)
 ```
 
-The `ErrorResponse` shape:
+The `ProblemDetails` shape (RFC 9457):
 
-```csharp
-public class ErrorResponse
+```json
 {
-    public string? Message { get; init; }
-    public string? Details { get; init; }    // Stack trace — Development only
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "The specific error message.",
+  "instance": "/api/v1/admin/users/..."
 }
 ```
 
-`ErrorResponse` is the **only** error body type across the entire API — both controllers and middleware return it. The middleware serializes with explicit `JsonNamingPolicy.CamelCase` to match ASP.NET's controller serialization. Never return raw strings, anonymous objects, or other shapes for errors.
+In Development, the exception middleware adds `extensions.stackTrace`. `ProblemDetails` is the **only** error body type across the entire API. Never return raw strings, anonymous objects, or other shapes for errors.
+
+### Writing ProblemDetails
+
+**In controllers** — use the built-in `Problem()` helper:
+
+```csharp
+return Problem(detail: result.Error, statusCode: StatusCodes.Status400BadRequest);
+```
+
+**In middleware / handlers** — inject `IProblemDetailsService` and call `WriteAsync()`. **You must set `Response.StatusCode` explicitly** — `WriteAsync()` does _not_ propagate `ProblemDetails.Status` to the HTTP status code:
+
+```csharp
+context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+
+await problemDetailsService.WriteAsync(new ProblemDetailsContext
+{
+    HttpContext = context,
+    ProblemDetails = new ProblemDetails
+    {
+        Status = StatusCodes.Status500InternalServerError,
+        Detail = "Something went wrong."
+    }
+});
+```
+
+The service is registered via `AddProblemDetails()` in `Program.cs` and automatically populates `Type` (RFC 9110 URI), `Title`, and `Instance` fields. Never write `ProblemDetails` JSON manually with `WriteAsJsonAsync` — that bypasses the pipeline and loses those fields.
 
 ## Error Messages
 
@@ -815,7 +845,7 @@ PermissionPolicyProvider           ← Resolves "Permission:users.view" policy d
 PermissionAuthorizationHandler
     ├── User is SuperAdmin? → Allow (implicit all)
     ├── User has "permission" claim matching? → Allow
-    └── Otherwise → 403 Forbidden
+    └── Otherwise → 403 Forbidden with ProblemDetails body
 ```
 
 #### JWT Permission Claims
@@ -1379,7 +1409,7 @@ Every endpoint **must** have all of these — no exceptions:
 /// <response code="401">If the user is not authenticated</response>
 [HttpPatch("me")]
 [ProducesResponseType(typeof(UserResponse), StatusCodes.Status200OK)]
-[ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+[ProducesResponseType(StatusCodes.Status400BadRequest)]
 [ProducesResponseType(StatusCodes.Status401Unauthorized)]
 public async Task<ActionResult<UserResponse>> UpdateCurrentUser(...)
 ```
@@ -1389,8 +1419,8 @@ public async Task<ActionResult<UserResponse>> UpdateCurrentUser(...)
 | `/// <summary>` | Becomes the operation description in the spec |
 | `/// <param>` | Documents request body and route/query parameters — **do not** include `CancellationToken` (its text leaks into `requestBody.description`) |
 | `/// <response code="...">` | Documents what each status code means |
-| `[ProducesResponseType(typeof(T), StatusCode)]` | Generates the response schema — use `typeof(UserResponse)` for success, `typeof(ErrorResponse)` for errors that return a body |
-| `[ProducesResponseType(StatusCode)]` | For status codes with **no body** (204, or 401 when the controller returns bare `Unauthorized()`) |
+| `[ProducesResponseType(typeof(T), StatusCode)]` | Generates the response schema — use `typeof(UserResponse)` for success codes (200, 201); error codes (400, 401, 403, 404, 429) get `ProblemDetails` automatically |
+| `[ProducesResponseType(StatusCode)]` | For status codes with **no body** (204 No Content) |
 | `ActionResult<T>` return type | Reinforces the 200-response schema |
 
 ### DTO Documentation — Every Property Gets XML Docs
@@ -1445,16 +1475,16 @@ Before adding or modifying any endpoint, verify:
 - [ ] `/// <summary>` on the controller action describing what it does
 - [ ] `/// <param>` for every **visible** parameter (request body, route, query) — **never** for `CancellationToken` (leaks into `requestBody.description`)
 - [ ] `/// <response code="...">` for every possible status code
-- [ ] `[ProducesResponseType]` for every status code — with `typeof(T)` for response bodies, `typeof(ErrorResponse)` for error codes that return a body
+- [ ] `[ProducesResponseType]` for every status code — with `typeof(T)` for success bodies (200, 201), **no type** on error codes (ASP.NET Core maps them to `ProblemDetails` automatically)
 - [ ] `ActionResult<T>` return type (not bare `ActionResult`) when returning a success body
-- [ ] Error responses always return `new ErrorResponse { Message = ... }` — never raw strings or anonymous objects
+- [ ] Error responses always use `Problem(detail: ..., statusCode: ...)` — never raw strings or anonymous objects
 - [ ] `/// <summary>` on every DTO class
 - [ ] `/// <summary>` on every DTO property
 - [ ] Correct nullability (`string` vs `string?`) matching the API contract
 - [ ] Data annotations (`[MaxLength]`, `[Range]`, etc.) on request DTOs for spec constraints
 - [ ] `[Description("...")]` on base-class query parameter properties (e.g. `PaginatedRequest`) — XML `<summary>` doesn't flow to inherited OAS parameters
 - [ ] `CancellationToken` as the last parameter on all async endpoints, passed through to service calls — **no** `<param>` XML doc for it
-- [ ] All `[ProducesResponseType]` attributes are on the action, not on the controller or base class — each action declares only the status codes it can actually produce (e.g., 429 only with `[EnableRateLimiting]`, 404 only on lookup endpoints)
+- [ ] All `[ProducesResponseType]` attributes are on the action — each action declares only the status codes it can actually produce (e.g., 429 only with `[EnableRateLimiting]`, 404 only on lookup endpoints)
 - [ ] Route uses lowercase (`[Route("api/[controller]")]` + `LowercaseUrls = true`)
 - [ ] Enums serialize as strings with all members listed (handled by `JsonStringEnumConverter` + `EnumSchemaTransformer` — verify in Scalar)
 - [ ] No `#pragma warning disable` — CS1573 (partial param docs) is suppressed project-wide because omitting `CancellationToken` param tags is intentional
