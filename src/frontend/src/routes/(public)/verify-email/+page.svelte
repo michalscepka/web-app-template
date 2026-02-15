@@ -2,6 +2,7 @@
 	import { browserClient, getErrorMessage } from '$lib/api';
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { onMount } from 'svelte';
 	import * as m from '$lib/paraglide/messages';
 	import * as Card from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
@@ -15,7 +16,7 @@
 	let status = $state<'verifying' | 'success' | 'error'>('verifying');
 	let errorMessage = $state('');
 
-	$effect(() => {
+	onMount(() => {
 		if (data.email && data.token) {
 			verify();
 		} else {
@@ -55,10 +56,7 @@
 		<ThemeToggle />
 	</div>
 
-	<div
-		class="sm:mx-auto sm:w-full sm:max-w-md"
-		in:fly={{ y: 20, duration: 600, delay: 100 }}
-	>
+	<div class="sm:mx-auto sm:w-full sm:max-w-md" in:fly={{ y: 20, duration: 600, delay: 100 }}>
 		{#if status === 'verifying'}
 			<Card.Root class="border-muted/60 bg-card/50 shadow-xl backdrop-blur-sm">
 				<Card.Header class="items-center">
@@ -90,10 +88,7 @@
 						<Button class="w-full">{m.auth_verifyEmail_goToDashboard()}</Button>
 					</a>
 					<div class="text-center text-sm">
-						<a
-							href={resolve('/login')}
-							class="font-medium text-primary hover:underline"
-						>
+						<a href={resolve('/login')} class="font-medium text-primary hover:underline">
 							{m.auth_verifyEmail_goToLogin()}
 						</a>
 					</div>
@@ -116,10 +111,7 @@
 				</Card.Header>
 				<Card.Content>
 					<div class="text-center text-sm">
-						<a
-							href={resolve('/login')}
-							class="font-medium text-primary hover:underline"
-						>
+						<a href={resolve('/login')} class="font-medium text-primary hover:underline">
 							{m.auth_verifyEmail_backToLogin()}
 						</a>
 					</div>
