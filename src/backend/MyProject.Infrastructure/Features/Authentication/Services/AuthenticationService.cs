@@ -1,14 +1,18 @@
+using System.Net;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MyProject.Shared;
 using MyProject.Infrastructure.Cryptography;
 using MyProject.Infrastructure.Features.Authentication.Models;
 using MyProject.Infrastructure.Features.Authentication.Options;
+using MyProject.Infrastructure.Features.Email.Options;
 using MyProject.Infrastructure.Persistence;
 using MyProject.Application.Cookies.Constants;
 using MyProject.Application.Features.Authentication;
 using MyProject.Application.Features.Authentication.Dtos;
+using MyProject.Application.Features.Email;
 using MyProject.Application.Cookies;
 using MyProject.Application.Caching;
 using MyProject.Application.Caching.Constants;
@@ -28,10 +32,14 @@ internal class AuthenticationService(
     ICookieService cookieService,
     IUserContext userContext,
     ICacheService cacheService,
+    IEmailService emailService,
     IOptions<AuthenticationOptions> authenticationOptions,
+    IOptions<EmailOptions> emailOptions,
+    ILogger<AuthenticationService> logger,
     MyProjectDbContext dbContext) : IAuthenticationService
 {
     private readonly AuthenticationOptions.JwtOptions _jwtOptions = authenticationOptions.Value.Jwt;
+    private readonly EmailOptions _emailOptions = emailOptions.Value;
 
     /// <inheritdoc />
     public async Task<Result<AuthenticationOutput>> Login(string username, string password, bool useCookies = false, bool rememberMe = false, CancellationToken cancellationToken = default)
@@ -120,6 +128,8 @@ internal class AuthenticationService(
         {
             return Result<Guid>.Failure(ErrorMessages.Auth.RegisterRoleAssignFailed);
         }
+
+        await SendVerificationEmailAsync(user, cancellationToken);
 
         return Result<Guid>.Success(user.Id);
     }
@@ -266,6 +276,135 @@ internal class AuthenticationService(
         return Result.Success();
     }
 
+    /// <inheritdoc />
+    public async Task<Result> ForgotPasswordAsync(string email, CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByEmailAsync(email);
+
+        if (user is null)
+        {
+            // Return success to prevent user enumeration
+            logger.LogDebug("Forgot password requested for non-existent email {Email}", email);
+            return Result.Success();
+        }
+
+        var token = await userManager.GeneratePasswordResetTokenAsync(user);
+        var encodedToken = Uri.EscapeDataString(token);
+        var encodedEmail = Uri.EscapeDataString(email);
+        var resetUrl = $"{_emailOptions.FrontendBaseUrl.TrimEnd('/')}/reset-password?token={encodedToken}&email={encodedEmail}";
+
+        var safeResetUrl = WebUtility.HtmlEncode(resetUrl);
+        var htmlBody = $"""
+            <h2>Reset Your Password</h2>
+            <p>You requested a password reset. Click the link below to set a new password:</p>
+            <p><a href="{safeResetUrl}">Reset Password</a></p>
+            <p>If you didn't request this, you can safely ignore this email.</p>
+            <p>This link will expire in 24 hours.</p>
+            """;
+
+        var plainTextBody = $"""
+            Reset Your Password
+
+            You requested a password reset. Visit the following link to set a new password:
+            {resetUrl}
+
+            If you didn't request this, you can safely ignore this email.
+            """;
+
+        var message = new EmailMessage(
+            To: email,
+            Subject: "Reset Your Password",
+            HtmlBody: htmlBody,
+            PlainTextBody: plainTextBody
+        );
+
+        await emailService.SendEmailAsync(message, cancellationToken);
+
+        return Result.Success();
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> ResetPasswordAsync(ResetPasswordInput input, CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByEmailAsync(input.Email);
+
+        if (user is null)
+        {
+            return Result.Failure(ErrorMessages.Auth.ResetPasswordFailed);
+        }
+
+        var resetResult = await userManager.ResetPasswordAsync(user, input.Token, input.NewPassword);
+
+        if (!resetResult.Succeeded)
+        {
+            var errors = resetResult.Errors.Select(e => e.Description).ToList();
+
+            // Distinguish between invalid token and other Identity errors (e.g., password policy)
+            if (errors.Any(e => e.Contains("Invalid token", StringComparison.OrdinalIgnoreCase)))
+            {
+                return Result.Failure(ErrorMessages.Auth.ResetPasswordTokenInvalid);
+            }
+
+            return Result.Failure(string.Join(" ", errors));
+        }
+
+        await RevokeUserTokens(user.Id, cancellationToken);
+
+        return Result.Success();
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> VerifyEmailAsync(VerifyEmailInput input, CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByEmailAsync(input.Email);
+
+        if (user is null)
+        {
+            return Result.Failure(ErrorMessages.Auth.EmailVerificationFailed);
+        }
+
+        if (user.EmailConfirmed)
+        {
+            return Result.Failure(ErrorMessages.Auth.EmailAlreadyVerified);
+        }
+
+        var confirmResult = await userManager.ConfirmEmailAsync(user, input.Token);
+
+        if (!confirmResult.Succeeded)
+        {
+            return Result.Failure(ErrorMessages.Auth.EmailVerificationFailed);
+        }
+
+        return Result.Success();
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> ResendVerificationEmailAsync(CancellationToken cancellationToken = default)
+    {
+        var userId = userContext.UserId;
+
+        if (!userId.HasValue)
+        {
+            return Result.Failure(ErrorMessages.Auth.NotAuthenticated, ErrorType.Unauthorized);
+        }
+
+        var user = await userManager.FindByIdAsync(userId.Value.ToString());
+
+        if (user is null)
+        {
+            return Result.Failure(ErrorMessages.Auth.UserNotFound);
+        }
+
+        if (user.EmailConfirmed)
+        {
+            return Result.Failure(ErrorMessages.Auth.EmailAlreadyVerified);
+        }
+
+        await SendVerificationEmailAsync(user, cancellationToken);
+
+        return Result.Success();
+    }
+
     /// <summary>
     /// Sets access and refresh token cookies. When <paramref name="persistent"/> is true,
     /// cookies receive explicit expiry dates so they survive browser restarts.
@@ -304,6 +443,49 @@ internal class AuthenticationService(
             await userManager.UpdateSecurityStampAsync(user);
             await cacheService.RemoveAsync(CacheKeys.SecurityStamp(userId), cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Sends a verification email to the specified user with a confirmation link.
+    /// </summary>
+    private async Task SendVerificationEmailAsync(ApplicationUser user, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(user.Email))
+        {
+            logger.LogWarning("Cannot send verification email: user {UserId} has no email address", user.Id);
+            return;
+        }
+
+        var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
+        var encodedToken = Uri.EscapeDataString(token);
+        var encodedEmail = Uri.EscapeDataString(user.Email);
+        var verifyUrl = $"{_emailOptions.FrontendBaseUrl.TrimEnd('/')}/verify-email?token={encodedToken}&email={encodedEmail}";
+
+        var safeVerifyUrl = WebUtility.HtmlEncode(verifyUrl);
+        var htmlBody = $"""
+            <h2>Verify Your Email Address</h2>
+            <p>Thank you for registering. Please click the link below to verify your email address:</p>
+            <p><a href="{safeVerifyUrl}">Verify Email</a></p>
+            <p>If you didn't create an account, you can safely ignore this email.</p>
+            """;
+
+        var plainTextBody = $"""
+            Verify Your Email Address
+
+            Thank you for registering. Visit the following link to verify your email address:
+            {verifyUrl}
+
+            If you didn't create an account, you can safely ignore this email.
+            """;
+
+        var message = new EmailMessage(
+            To: user.Email,
+            Subject: "Verify Your Email Address",
+            HtmlBody: htmlBody,
+            PlainTextBody: plainTextBody
+        );
+
+        await emailService.SendEmailAsync(message, cancellationToken);
     }
 
     /// <summary>
