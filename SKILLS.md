@@ -90,9 +90,15 @@ Step-by-step recipes for common operations. Each recipe lists exact paths, patte
       --output-dir Features/Postgres/Migrations
     ```
 
-**Verify:** `dotnet build src/backend/MyProject.slnx`
+**Tests:**
 
-**Commit strategy:** entity+config+errors → interface+DTOs → service+DI → controller+DTOs+mapper+validators → migration
+18. Add component test for the service in `src/backend/tests/MyProject.Component.Tests/Services/{Feature}ServiceTests.cs` (see [Add a Component Test](#add-a-component-test))
+19. Add API integration tests in `src/backend/tests/MyProject.Api.Tests/Controllers/{Feature}ControllerTests.cs` (see [Add an API Integration Test](#add-an-api-integration-test))
+20. Add validator tests in `src/backend/tests/MyProject.Api.Tests/Validators/{Validator}Tests.cs` (see [Add a Validator Test](#add-a-validator-test))
+
+**Verify:** `dotnet test src/backend/MyProject.slnx -c Release`
+
+**Commit strategy:** entity+config+errors → interface+DTOs → service+DI → controller+DTOs+mapper+validators → migration → tests
 
 ### Add an Endpoint to an Existing Feature
 
@@ -104,8 +110,11 @@ Step-by-step recipes for common operations. Each recipe lists exact paths, patte
 6. Add controller action to `WebApi/Features/{Feature}/{Feature}Controller.cs`:
    - `/// <summary>` + `[ProducesResponseType]` + `CancellationToken`
 7. Add validator if needed
-8. Verify: `dotnet build src/backend/MyProject.slnx`
-9. **After deploying/running:** regenerate frontend types (see [Regenerate API Types](#regenerate-api-types))
+8. Add/update component tests for the service method (see [Add a Component Test](#add-a-component-test))
+9. Add/update API integration tests for the new action (see [Add an API Integration Test](#add-an-api-integration-test))
+10. If validator added, add validator tests (see [Add a Validator Test](#add-a-validator-test))
+11. Verify: `dotnet test src/backend/MyProject.slnx -c Release`
+12. **After deploying/running:** regenerate frontend types (see [Regenerate API Types](#regenerate-api-types))
 
 > **Breaking change check:** If modifying an existing endpoint's request/response shape, this is a breaking change for the frontend. Either version the endpoint or update the frontend in the same PR.
 
@@ -373,6 +382,168 @@ backgroundJobClient.Schedule<WelcomeEmailJob>(
 **4. Verify:** `dotnet build src/backend/MyProject.slnx`
 
 See `ExampleFireAndForgetJob.cs` in the codebase for a working reference. The Hangfire dashboard and admin UI at `/admin/jobs` show one-time job executions alongside recurring jobs.
+
+### Run Tests
+
+```bash
+# All tests (Release mode — matches CI)
+dotnet test src/backend/MyProject.slnx -c Release
+
+# Single project
+dotnet test src/backend/tests/MyProject.Unit.Tests -c Release
+
+# Filter by class name
+dotnet test src/backend/tests/MyProject.Component.Tests -c Release --filter "FullyQualifiedName~AuthenticationServiceTests"
+
+# Filter by method name
+dotnet test src/backend/tests/MyProject.Unit.Tests -c Release --filter "ResultTests.Success_ReturnsIsSuccessTrue"
+```
+
+No external dependencies (Docker, PostgreSQL, Redis) needed — all tests run in-process.
+
+### Add a Unit Test
+
+For pure logic in Shared, Domain, or Application layers.
+
+1. Create `src/backend/tests/MyProject.Unit.Tests/{Layer}/{ClassUnderTest}Tests.cs`
+2. Structure:
+   ```csharp
+   namespace MyProject.Unit.Tests.{Layer};
+
+   public class {ClassUnderTest}Tests
+   {
+       [Fact]
+       public void {Method}_{Scenario}_{Expected}()
+       {
+           // Arrange / Act / Assert
+       }
+   }
+   ```
+3. No mocking, no DI — test pure inputs and outputs
+4. Verify: `dotnet test src/backend/tests/MyProject.Unit.Tests -c Release`
+
+### Add a Component Test
+
+For service business logic with mocked dependencies.
+
+1. Create `src/backend/tests/MyProject.Component.Tests/Services/{Service}Tests.cs`
+2. Create mocks in constructor or setup method:
+   ```csharp
+   public class OrderServiceTests
+   {
+       private readonly MyProjectDbContext _dbContext = TestDbContextFactory.Create();
+       private readonly IOrderRepository _orderRepo = Substitute.For<IOrderRepository>();
+       private readonly ICacheService _cache = Substitute.For<ICacheService>();
+       // ... create service instance with mocks
+   }
+   ```
+3. For Identity mocking, use `IdentityMockHelpers`:
+   ```csharp
+   var userManager = IdentityMockHelpers.CreateMockUserManager();
+   var roleManager = IdentityMockHelpers.CreateMockRoleManager();
+   ```
+4. Assert on `Result` properties:
+   ```csharp
+   Assert.True(result.IsSuccess);
+   Assert.Equal(expectedId, result.Value);
+   ```
+5. Verify: `dotnet test src/backend/tests/MyProject.Component.Tests -c Release`
+
+### Add an API Integration Test
+
+For testing the full HTTP pipeline (routes, auth, validation, status codes).
+
+1. Create `src/backend/tests/MyProject.Api.Tests/Controllers/{Controller}Tests.cs`
+2. Structure:
+   ```csharp
+   public class OrdersControllerTests : IClassFixture<CustomWebApplicationFactory>, IDisposable
+   {
+       private readonly CustomWebApplicationFactory _factory;
+       private readonly HttpClient _client;
+
+       public OrdersControllerTests(CustomWebApplicationFactory factory)
+       {
+           _factory = factory;
+           _client = factory.CreateClient();
+       }
+
+       public void Dispose() => _client.Dispose();
+   }
+   ```
+3. Auth is controlled per-request via the `Authorization` header (parsed by `TestAuthHandler`):
+   ```csharp
+   // Basic authenticated user (User role, no permissions)
+   new HttpRequestMessage(HttpMethod.Get, "/api/v1/endpoint")
+       { Headers = { { "Authorization", "Test" } } };
+
+   // User with specific permissions
+   new HttpRequestMessage(HttpMethod.Get, "/api/v1/admin/users")
+       { Headers = { { "Authorization", TestAuth.WithPermissions(AppPermissions.Users.View) } } };
+
+   // SuperAdmin (bypasses all permission checks)
+   new HttpRequestMessage(HttpMethod.Get, "/api/v1/admin/users")
+       { Headers = { { "Authorization", TestAuth.SuperAdmin() } } };
+
+   // Unauthenticated (no Authorization header — returns 401)
+   using var anonClient = _factory.CreateClient();
+   ```
+4. Configure mock returns per test:
+   ```csharp
+   _factory.AdminService.GetUsersAsync(1, 10, null, Arg.Any<CancellationToken>())
+       .Returns(new AdminUserListOutput([], 0, 1, 10));
+   ```
+5. If the service interface isn't already mocked in `CustomWebApplicationFactory`, add it there first
+6. For success responses (200/201 with a body), add **response contract assertions**:
+   - Add a frozen contract record to `tests/MyProject.Api.Tests/Contracts/ResponseContracts.cs` matching the response shape
+   - Deserialize with `ReadFromJsonAsync<ContractRecord>()` and assert key fields are populated
+   - This catches silent field renames, nullability changes, and removed properties
+   ```csharp
+   var body = await response.Content.ReadFromJsonAsync<MyContractRecord>();
+   Assert.NotNull(body);
+   Assert.NotEqual(Guid.Empty, body.Id);
+   ```
+7. Verify: `dotnet test src/backend/tests/MyProject.Api.Tests -c Release`
+
+### Add a Validator Test
+
+For testing FluentValidation rules without starting the test server. Uses FluentValidation's `TestHelper` extensions.
+
+1. Create `src/backend/tests/MyProject.Api.Tests/Validators/{Validator}Tests.cs`
+2. Instantiate the validator directly and use `TestValidate` + assertion helpers:
+   ```csharp
+   using FluentValidation.TestHelper;
+
+   public class OrderRequestValidatorTests
+   {
+       private readonly OrderRequestValidator _validator = new();
+
+       [Fact]
+       public void ValidRequest_ShouldPassValidation()
+       {
+           var result = _validator.TestValidate(new OrderRequest { Name = "Widget", Quantity = 1 });
+
+           result.ShouldNotHaveAnyValidationErrors();
+       }
+
+       [Fact]
+       public void MissingName_ShouldFail()
+       {
+           var result = _validator.TestValidate(new OrderRequest { Name = "", Quantity = 1 });
+
+           result.ShouldHaveValidationErrorFor(x => x.Name);
+       }
+
+       [Fact]
+       public void InvalidQuantity_ShouldFailWithMessage()
+       {
+           var result = _validator.TestValidate(new OrderRequest { Name = "Widget", Quantity = -1 });
+
+           result.ShouldHaveValidationErrorFor(x => x.Quantity)
+               .WithErrorMessage("Quantity must be positive.");
+       }
+   }
+   ```
+3. Verify: `dotnet test src/backend/tests/MyProject.Api.Tests -c Release`
 
 ---
 
