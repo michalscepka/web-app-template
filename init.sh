@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #══════════════════════════════════════════════════════════════════════════════
-#  Web API Template - Project Initialization Script
+#  Project Initialization Script
 #══════════════════════════════════════════════════════════════════════════════
 #
 #  Usage:
@@ -107,7 +107,7 @@ prompt_value() {
 }
 
 show_help() {
-    echo "Web API Template - Project Initialization Script"
+    echo "Project Initialization Script"
     echo ""
     echo "Usage:"
     echo "  ./init.sh                     Interactive mode"
@@ -140,6 +140,7 @@ check_prerequisites() {
     command -v git >/dev/null 2>&1 || missing+=("git")
     command -v dotnet >/dev/null 2>&1 || missing+=("dotnet")
     command -v docker >/dev/null 2>&1 || missing+=("docker")
+    command -v node >/dev/null 2>&1 || missing+=("node")
 
     if [[ ${#missing[@]} -gt 0 ]]; then
         print_error "Missing required tools: ${missing[*]}"
@@ -204,9 +205,20 @@ prompt_checklist() {
         return
     fi
 
+    local first_draw=true
+
     while true; do
+        # Clear previous draw
+        if [[ "$first_draw" != "true" ]]; then
+            local lines_up=$((count + 3))
+            for ((j = 0; j < lines_up; j++)); do
+                echo -en "\033[A\033[2K"
+            done
+        fi
+        first_draw=false
+
         echo ""
-        echo -e "${BOLD}  Toggle options (press number), Enter to confirm:${NC}"
+        echo -e "${BOLD}  Press 1-${count} to toggle, Enter to confirm:${NC}"
         echo ""
 
         for ((i = 0; i < count; i++)); do
@@ -218,31 +230,22 @@ prompt_checklist() {
             fi
         done
 
-        echo ""
-        read -p "$(echo -e "${BOLD}Toggle [1-${count}]${NC} or ${BOLD}Enter${NC} to continue: ")" choice
+        # Single keypress — no Enter needed to toggle
+        read -rsn1 choice
 
+        # Enter (empty) confirms selection
         if [[ -z "$choice" ]]; then
+            echo ""
             break
         fi
 
-        if [[ "$choice" =~ ^[0-9]+$ ]] && [[ $choice -ge 1 ]] && [[ $choice -le $count ]]; then
+        if [[ "$choice" =~ ^[0-9]$ ]] && [[ $choice -ge 1 ]] && [[ $choice -le $count ]]; then
             local idx=$((choice - 1))
             if [[ "${selected[$idx]}" == "1" ]]; then
                 selected[$idx]=0
             else
                 selected[$idx]=1
             fi
-            # Move cursor up to redraw (count + 4 lines: header, blank, items, blank, prompt)
-            local lines_up=$((count + 4))
-            for ((j = 0; j < lines_up; j++)); do
-                echo -en "\033[A\033[2K"
-            done
-        else
-            # Invalid input — redraw
-            local lines_up=$((count + 4))
-            for ((j = 0; j < lines_up; j++)); do
-                echo -en "\033[A\033[2K"
-            done
         fi
     done
 
@@ -300,13 +303,25 @@ done
 # ─────────────────────────────────────────────────────────────────────────────
 # Main Script
 # ─────────────────────────────────────────────────────────────────────────────
-clear
-print_header "Web API Template Initialization"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+START_TIME=$(date +%s)
+
+echo ""
+print_header "Project Initialization"
+
+# Verify we're in the project root
+if [[ ! -d "src/backend" || ! -d "src/frontend" ]]; then
+    print_error "This script must be run from the project root directory."
+    print_info "Expected to find src/backend and src/frontend directories."
+    exit 1
+fi
 
 # Check prerequisites
 print_step "Checking prerequisites..."
 check_prerequisites
-print_success "All prerequisites found (git, dotnet, docker)"
+print_success "All prerequisites found (git, dotnet, docker, node)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 1: Project Name
@@ -571,7 +586,7 @@ fi
 if [[ "$CREATE_MIGRATION" == "y" ]]; then
     print_step "Creating initial migration..."
 
-    MIGRATION_DIR="src/backend/$NEW_NAME.Infrastructure/Features/Postgres/Migrations"
+    MIGRATION_DIR="src/backend/$NEW_NAME.Infrastructure/Persistence/Migrations"
 
     if [ -d "$MIGRATION_DIR" ]; then
         print_substep "Clearing existing migrations..."
@@ -599,13 +614,13 @@ if [[ "$CREATE_MIGRATION" == "y" ]]; then
         print_info "  dotnet ef migrations add Initial \\"
         print_info "    --project src/backend/$NEW_NAME.Infrastructure \\"
         print_info "    --startup-project src/backend/$NEW_NAME.WebApi \\"
-        print_info "    --output-dir Features/Postgres/Migrations"
+        print_info "    --output-dir Persistence/Migrations"
     else
         print_substep "Running ef migrations add..."
         if dotnet ef migrations add Initial \
             --project "src/backend/$NEW_NAME.Infrastructure" \
             --startup-project "src/backend/$NEW_NAME.WebApi" \
-            --output-dir Features/Postgres/Migrations \
+            --output-dir Persistence/Migrations \
             --no-build >/dev/null 2>&1; then
 
             print_success "Migration 'Initial' created"
@@ -623,7 +638,7 @@ if [[ "$CREATE_MIGRATION" == "y" ]]; then
             print_info "  dotnet ef migrations add Initial \\"
             print_info "    --project src/backend/$NEW_NAME.Infrastructure \\"
             print_info "    --startup-project src/backend/$NEW_NAME.WebApi \\"
-            print_info "    --output-dir Features/Postgres/Migrations"
+            print_info "    --output-dir Persistence/Migrations"
         fi
     fi
 fi
@@ -646,8 +661,13 @@ print_success "Init scripts removed"
 # Step 6: Start Docker
 if [[ "$START_DOCKER" == "y" ]]; then
     print_step "Starting Docker containers..."
-    docker compose -f docker-compose.local.yml up -d --build
-    print_success "Docker containers started"
+    if docker compose -f docker-compose.local.yml up -d --build; then
+        print_success "Docker containers started"
+    else
+        print_warning "Docker failed to start. Is Docker running?"
+        print_info "You can start containers manually later with:"
+        echo "  docker compose -f docker-compose.local.yml up -d --build"
+    fi
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -673,6 +693,8 @@ echo -e "
   API Docs:    ${CYAN}http://localhost:$API_PORT/scalar${NC}
   Hangfire:    ${CYAN}http://localhost:$API_PORT/hangfire${NC}
   Seq (logs):  ${CYAN}http://localhost:$SEQ_PORT${NC}
+
+  ${DIM}Completed in $(($(date +%s) - START_TIME))s${NC}
 
   ${DIM}Happy coding!${NC}
 "

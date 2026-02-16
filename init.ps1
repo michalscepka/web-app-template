@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Web API Template - Project Initialization Script
+    Project Initialization Script
 
 .DESCRIPTION
     Initializes a new project from the Web API template by:
@@ -91,7 +91,7 @@ function Write-Success {
     Write-Host "[OK] $Text" -ForegroundColor Green
 }
 
-function Write-Warning {
+function Write-WarnMsg {
     param([string]$Text)
     Write-Host "[WARN] $Text" -ForegroundColor Yellow
 }
@@ -154,6 +154,7 @@ function Test-Prerequisites {
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) { $missing += "git" }
     if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { $missing += "dotnet" }
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { $missing += "docker" }
+    if (-not (Get-Command node -ErrorAction SilentlyContinue)) { $missing += "node" }
 
     if ($missing.Count -gt 0) {
         Write-ErrorMessage "Missing required tools: $($missing -join ', ')"
@@ -229,7 +230,7 @@ function Read-Checklist {
     while ($true) {
         # Clear previous draw (except first time)
         if (-not $firstDraw) {
-            $linesToClear = $Options.Count + 4
+            $linesToClear = $Options.Count + 3
             for ($j = 0; $j -lt $linesToClear; $j++) {
                 [Console]::SetCursorPosition(0, [Console]::CursorTop - 1)
                 [Console]::Write((" " * [Console]::WindowWidth))
@@ -239,7 +240,7 @@ function Read-Checklist {
         $firstDraw = $false
 
         Write-Host ""
-        Write-Host "  Toggle options (press number), Enter to confirm:" -ForegroundColor White
+        Write-Host "  Press 1-$($Options.Count) to toggle, Enter to confirm:" -ForegroundColor White
         Write-Host ""
 
         for ($i = 0; $i -lt $Options.Count; $i++) {
@@ -258,15 +259,16 @@ function Read-Checklist {
             }
         }
 
-        Write-Host ""
-        $choice = Read-Host "Toggle [1-$($Options.Count)] or Enter to continue"
+        # Single keypress — no Enter needed to toggle
+        $key = [Console]::ReadKey($true)
 
-        if ([string]::IsNullOrWhiteSpace($choice)) {
+        if ($key.Key -eq [ConsoleKey]::Enter) {
+            Write-Host ""
             return $selected
         }
 
         $num = 0
-        if ([int]::TryParse($choice, [ref]$num) -and $num -ge 1 -and $num -le $Options.Count) {
+        if ([int]::TryParse($key.KeyChar, [ref]$num) -and $num -ge 1 -and $num -le $Options.Count) {
             $idx = $num - 1
             $selected[$idx] = -not $selected[$idx]
         }
@@ -276,13 +278,22 @@ function Read-Checklist {
 # -----------------------------------------------------------------------------
 # Main Script
 # -----------------------------------------------------------------------------
-Clear-Host
-Write-Header "Web API Template Initialization"
+$startTime = Get-Date
+
+Write-Host ""
+Write-Header "Project Initialization"
+
+# Verify we're in the project root
+if (-not (Test-Path (Join-Path $ScriptDir "src/backend")) -or -not (Test-Path (Join-Path $ScriptDir "src/frontend"))) {
+    Write-ErrorMessage "This script must be run from the project root directory."
+    Write-Info "Expected to find src/backend and src/frontend directories."
+    exit 1
+}
 
 # Check prerequisites
 Write-Step "Checking prerequisites..."
 Test-Prerequisites
-Write-Success "All prerequisites found (git, dotnet, docker)"
+Write-Success "All prerequisites found (git, dotnet, docker, node)"
 
 # -----------------------------------------------------------------------------
 # Step 1: Project Name
@@ -408,7 +419,7 @@ Write-Host ""
 
 $proceed = Read-YesNo "Proceed with initialization?" $true
 if (-not $proceed) {
-    Write-Warning "Aborted by user"
+    Write-WarnMsg "Aborted by user"
     exit 0
 }
 
@@ -435,8 +446,10 @@ if (Test-Path $frontendEnvExample) {
 $rootEnvExample = Join-Path $ScriptDir ".env.example"
 $rootEnv = Join-Path $ScriptDir ".env"
 if (Test-Path $rootEnvExample) {
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     $jwtBytes = New-Object byte[] 48
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($jwtBytes)
+    $rng.GetBytes($jwtBytes)
+    $rng.Dispose()
     $jwtSecret = [Convert]::ToBase64String($jwtBytes) -replace '[/+=]', '' | ForEach-Object { $_.Substring(0, [Math]::Min(64, $_.Length)) }
     $envContent = [System.IO.File]::ReadAllText($rootEnvExample)
     $envContent = $envContent -replace '(?m)^JWT_SECRET_KEY=.*$', "JWT_SECRET_KEY=$jwtSecret"
@@ -568,7 +581,7 @@ if ($NewName -eq "MyProject") {
 if ($CreateMigration) {
     Write-Step "Creating initial migration..."
 
-    $migrationDir = Join-Path $ScriptDir "src/backend/$NewName.Infrastructure/Features/Postgres/Migrations"
+    $migrationDir = Join-Path $ScriptDir "src/backend/$NewName.Infrastructure/Persistence/Migrations"
 
     if (Test-Path $migrationDir) {
         Write-SubStep "Clearing existing migrations..."
@@ -617,7 +630,7 @@ if ($CreateMigration) {
 
     if (-not $migrationFailed) {
         Write-SubStep "Running ef migrations add..."
-        $output = dotnet ef migrations add Initial --project "src/backend/$NewName.Infrastructure" --startup-project "src/backend/$NewName.WebApi" --output-dir Features/Postgres/Migrations --no-build 2>&1
+        $output = dotnet ef migrations add Initial --project "src/backend/$NewName.Infrastructure" --startup-project "src/backend/$NewName.WebApi" --output-dir Persistence/Migrations --no-build 2>&1
 
         if ($LASTEXITCODE -ne 0) {
             $migrationFailed = $true
@@ -629,8 +642,8 @@ if ($CreateMigration) {
     $ErrorActionPreference = "Stop"
 
     if ($migrationFailed) {
-        Write-Warning "Migration step failed. You can create it manually later with:"
-        Write-Host "  dotnet ef migrations add Initial --project src/backend/$NewName.Infrastructure --startup-project src/backend/$NewName.WebApi --output-dir Features/Postgres/Migrations" -ForegroundColor DarkGray
+        Write-WarnMsg "Migration step failed. You can create it manually later with:"
+        Write-Host "  dotnet ef migrations add Initial --project src/backend/$NewName.Infrastructure --startup-project src/backend/$NewName.WebApi --output-dir Persistence/Migrations" -ForegroundColor DarkGray
     }
     else {
         Write-Success "Migration 'Initial' created"
@@ -676,10 +689,16 @@ $ErrorActionPreference = "Stop"
 
 Write-Success "Init scripts removed"
 
-# Schedule self-deletion after script exits
+# Schedule self-deletion after script exits (cross-platform)
+$pwshExe = (Get-Process -Id $PID).Path
 $cleanupScript = "Start-Sleep -Seconds 2; Remove-Item -LiteralPath '$initPs1' -Force -ErrorAction SilentlyContinue"
 $encodedCmd = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cleanupScript))
-Start-Process powershell -ArgumentList "-NoProfile", "-WindowStyle", "Hidden", "-EncodedCommand", $encodedCmd
+$startArgs = @{
+    FilePath     = $pwshExe
+    ArgumentList = "-NoProfile", "-EncodedCommand", $encodedCmd
+}
+if ($env:OS -eq 'Windows_NT') { $startArgs.WindowStyle = "Hidden" }
+Start-Process @startArgs
 
 # Step 6: Start Docker
 if ($StartDocker) {
@@ -687,7 +706,7 @@ if ($StartDocker) {
     $ErrorActionPreference = "Continue"
     docker compose -f docker-compose.local.yml up -d --build
     if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Docker failed to start. Is Docker Desktop running?"
+        Write-WarnMsg "Docker failed to start. Is Docker running?"
         Write-Info "You can start containers manually later with:"
         Write-Host "  docker compose -f docker-compose.local.yml up -d --build" -ForegroundColor DarkGray
     }
@@ -720,6 +739,9 @@ Write-Host "  Frontend:    " -NoNewline; Write-Host "http://localhost:$FrontendP
 Write-Host "  API Docs:    " -NoNewline; Write-Host "http://localhost:$ApiPort/scalar" -ForegroundColor Cyan
 Write-Host "  Hangfire:    " -NoNewline; Write-Host "http://localhost:$ApiPort/hangfire" -ForegroundColor Cyan
 Write-Host "  Seq (logs):  " -NoNewline; Write-Host "http://localhost:$SeqPort" -ForegroundColor Cyan
+Write-Host ""
+$elapsed = [math]::Round(((Get-Date) - $startTime).TotalSeconds)
+Write-Host "  Completed in ${elapsed}s" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  Happy coding!" -ForegroundColor DarkGray
 Write-Host ""
